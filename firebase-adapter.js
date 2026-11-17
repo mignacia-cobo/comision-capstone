@@ -9,6 +9,21 @@
   const gate = $('#gate'), gateBody = $('#gateBody'), modal = $('#modal');
   const SEATS = [['doc', 'Docente de la asignatura'], ['c1', 'Comisión 1'], ['c2', 'Comisión 2'], ['c3', 'Comisión 3'], ['c4', 'Comisión 4']];
   let auth = null, db = null, me = null, started = false;
+  const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* sin almacenamiento */ } };
+  const fail = (code, userMessage) => ({ code, message: userMessage, userMessage });
+  /* motores de Claude: clave de API (ENG) y puente local con Claude Code (BR) */
+  const ENG = { key: '', scope: 'asks' };
+  const BR = { url: CFG.puente || 'http://127.0.0.1:8765', on: lsGet('bridge') === '1', ok: false, info: null };
+  const ownEngine = () => (ENG.key && ENG.scope === 'all') ? 'api' : (BR.on && BR.ok ? 'local' : 'manual');
+  const askEngine = () => ENG.key ? 'api' : (BR.on && BR.ok ? 'local' : 'manual');
+  function engClass() { const b = document.body; [...b.classList].filter(c => c.startsWith('eng-')).forEach(c => b.classList.remove(c)); if (window.PANEL) b.classList.add('eng-' + window.PANEL.engine); }
+  async function ping(ms) {
+    if (!BR.on) { BR.ok = false; engClass(); return false; }
+    try { const c = new AbortController(), t = setTimeout(() => c.abort(), ms || 1500); const r = await fetch(BR.url + '/ping', { signal: c.signal }); clearTimeout(t); const j = await r.json(); BR.ok = !!(j && j.ok); BR.info = j; }
+    catch (e) { BR.ok = false; }
+    engClass(); return BR.ok;
+  }
 
   /* ---------- pantalla de entrada ---------- */
   function gateShow(html) { gate.hidden = false; gateBody.innerHTML = html; }
@@ -102,17 +117,22 @@
     let RUB, LVIDX;
     try { RUB = JSON.parse(rub.data().json); LVIDX = JSON.parse(rub.data().lvidx); }
     catch (e) { return gateError({ message: 'Las rúbricas guardadas no se pueden leer. Vuelve a cargar el archivo de datos.' }); }
-    let apiKey = '', scope = 'asks';
-    if (owner) { try { const c = await db.doc('private/claude').get(); if (c.exists && c.data().key) { apiKey = String(c.data().key); scope = c.data().scope === 'all' ? 'all' : 'asks'; } } catch (e) { /* sin clave: copiar y pegar */ } }
-    /* motor: 'manual' = todo por copiar y pegar; 'mixed' = la clave responde solo las consultas de la comisión; 'api' = la clave responde todo */
-    const engine = owner ? (apiKey ? (scope === 'all' ? 'api' : 'mixed') : 'manual') : 'none';
-    window.PANEL = { mode: 'web', owner, seat: owner ? 'doc' : seat, email, name: user.displayName || email, engine, askEngine: apiKey ? 'api' : 'manual', tab: Math.random().toString(36).slice(2, 10) };
+    ENG.key = ''; ENG.scope = 'asks';
+    if (owner) { try { const c = await db.doc('private/claude').get(); if (c.exists && c.data().key) { ENG.key = String(c.data().key); ENG.scope = c.data().scope === 'all' ? 'all' : 'asks'; } } catch (e) { /* sin clave */ } }
+    /* motor de lo propio: 'api' (clave para todo), 'local' (Claude Code de este computador), 'mixed' (clave solo para la comisión; lo propio por copiar y pegar) o 'manual' */
+    window.PANEL = {
+      mode: 'web', owner, seat: owner ? 'doc' : seat, email, name: user.displayName || email, tab: Math.random().toString(36).slice(2, 10),
+      get engine() { if (!owner) return 'none'; const o = ownEngine(); return o === 'manual' && ENG.key ? 'mixed' : o; },
+      get askEngine() { return owner ? askEngine() : 'manual'; },
+      get hint() { const o = ownEngine(); let h = o === 'local' ? 'Claude responde aquí mismo, con tu sesión de Claude Code en este computador.' : o === 'api' ? 'Claude responde aquí mismo, con la clave de la API.' : 'Cada consulta abre una ventana para copiarla a tu sesión de Claude y pegar la respuesta.'; if (ENG.key && o !== 'api') h += ' Las consultas de la comisión se responden solas con la clave.'; return h; }
+    };
+    if (owner && BR.on) ping(1500);
     window.PANEL_DATA = { RUB, LVIDX, TPL_F2: tpl.exists ? tpl.data().b64 : '' };
-    const services = { db, user: userSvc(user, owner), sample: owner ? pickSample(apiKey, scope) : null, dictation: makeDictation(), downloads };
+    const services = { db, user: userSvc(user, owner), sample: owner ? pickSample() : null, dictation: makeDictation(), downloads };
     window.claude = { use: n => Promise.resolve(services[n] || null) };
     if (started) return; started = true;
     const s = document.createElement('script'); s.src = 'app.js';
-    s.onload = () => { gate.hidden = true; $('#app').hidden = false; document.body.classList.add('web', owner ? 'is-owner' : 'is-member', 'eng-' + window.PANEL.engine); topButton(); };
+    s.onload = () => { gate.hidden = true; $('#app').hidden = false; document.body.classList.add('web', owner ? 'is-owner' : 'is-member'); engClass(); topButton(); };
     s.onerror = () => gateError({ message: 'No se pudo cargar app.js.' });
     document.body.appendChild(s);
   }
@@ -155,17 +175,24 @@
         <label class="field" style="flex-wrap:wrap">Cargar o actualizar equipos y expedientes <input type="file" id="mSeed" accept=".json,application/json"></label>
         <span class="hint" id="mProg">Usa el archivo de datos que te entrega Claude. No borra evaluaciones, apuntes ni horarios.</span>
         <div class="row"><button class="btn" id="mBackup">Descargar respaldo de las evaluaciones</button></div></div>
-      <div class="stack" style="gap:8px"><b>Consultas a Claude</b>
-        <span class="hint">${window.PANEL.engine === 'manual' ? 'Ahora todo se copia y se pega en tu sesión de Claude. Con una clave de la API de Anthropic (se crea en console.anthropic.com y se paga por uso: centavos por consulta) las consultas se responden solas. La clave se guarda en tu proyecto de Firebase y solo tú puedes leerla.' : window.PANEL.engine === 'mixed' ? 'Activo: la clave responde sola las consultas de la comisión. Lo tuyo (briefing, preguntas, niveles, feedback) sigue con tu sesión de Claude.' : 'Activo: la clave responde todas las consultas, también las tuyas.'}</span>
-        <label class="field"><input type="radio" name="mScope" value="asks" ${window.PANEL.engine !== 'api' ? 'checked' : ''}> Usar la clave solo para las consultas de la comisión</label>
-        <label class="field"><input type="radio" name="mScope" value="all" ${window.PANEL.engine === 'api' ? 'checked' : ''}> Usar la clave para todo</label>
-        <div class="row"><input type="password" id="mKey" placeholder="sk-ant-…" autocomplete="off" aria-label="Clave de la API de Anthropic" style="flex:1 1 220px"><button class="btn" id="mKeySave">Guardar</button>${window.PANEL.engine !== 'manual' ? '<button class="btn ghost" id="mKeyDel">Quitar clave</button>' : ''}</div>
+      <div class="stack" style="gap:8px"><b>Claude con tu sesión, en este computador</b>
+        <span class="hint">Con Claude Code instalado, tus consultas (briefing, preguntas, niveles, feedback) se responden aquí mismo con tu sesión, sin copiar y pegar. Abre la Terminal, ejecuta <code>node ~/Desktop/comision-capstine/puente-claude.js</code> y déjala abierta mientras evalúas. La primera vez, Chrome puede pedirte permiso para que esta página se conecte con tu computador.</span>
+        <label class="field"><input type="checkbox" id="mBridge" ${BR.on ? 'checked' : ''}> Usar Claude Code de este computador</label>
+        <div class="row"><button class="btn sm" id="mBridgeTest">Probar conexión</button><span class="hint" id="mBridgeMsg" aria-live="polite">${BR.on ? (BR.ok ? 'Conectado' + (BR.info && BR.info.claude ? ': ' + esc(BR.info.claude) : '') : 'No se detecta el puente.') : 'Desactivado.'}</span></div></div>
+      <div class="stack" style="gap:8px"><b>Clave de la API para la comisión</b>
+        <span class="hint">${!ENG.key ? 'Con una clave de la API de Anthropic (se crea en console.anthropic.com y se paga por uso: centavos por consulta) las consultas de la comisión se responden solas apenas llegan. La clave se guarda en tu proyecto de Firebase y solo tú puedes leerla.' : ENG.scope === 'all' ? 'Activa: la clave responde todas las consultas, también las tuyas.' : 'Activa: la clave responde sola las consultas de la comisión. Lo tuyo no usa la clave.'}</span>
+        <label class="field"><input type="radio" name="mScope" value="asks" ${ENG.scope !== 'all' ? 'checked' : ''}> Usar la clave solo para las consultas de la comisión</label>
+        <label class="field"><input type="radio" name="mScope" value="all" ${ENG.scope === 'all' ? 'checked' : ''}> Usar la clave para todo</label>
+        <div class="row"><input type="password" id="mKey" placeholder="sk-ant-…" autocomplete="off" aria-label="Clave de la API de Anthropic" style="flex:1 1 220px"><button class="btn" id="mKeySave">Guardar</button>${ENG.key ? '<button class="btn ghost" id="mKeyDel">Quitar clave</button>' : ''}</div>
         <span class="hint" id="mKeyMsg" aria-live="polite"></span></div>
       <div class="row" style="justify-content:space-between"><span class="hint">${esc(window.PANEL.email)}</span><span class="row"><button class="btn" id="mOut">Cerrar sesión</button><button class="btn" id="mX">Volver al panel</button></span></div>`);
     $('#mX').onclick = () => closeModal(); $('#mOut').onclick = signOut;
+    const brMsg = () => { $('#mBridgeMsg').textContent = BR.on ? (BR.ok ? 'Conectado' + (BR.info && BR.info.claude ? ': ' + BR.info.claude : '') + '.' : 'No se detecta el puente. Revisa que esté abierto en la Terminal.') : 'Desactivado.'; };
+    $('#mBridge').onchange = async ev => { BR.on = ev.target.checked; lsSet('bridge', BR.on ? '1' : '0'); $('#mBridgeMsg').textContent = BR.on ? 'Buscando el puente…' : 'Desactivado.'; await ping(2500); brMsg(); };
+    $('#mBridgeTest').onclick = async () => { if (!BR.on) { $('#mBridgeMsg').textContent = 'Marca primero la casilla.'; return; } $('#mBridgeMsg').textContent = 'Buscando el puente…'; await ping(2500); brMsg(); };
     $('#mKeySave').onclick = async () => {
       const k = $('#mKey').value.trim(), m = $('#mKeyMsg'), sc = (modal.querySelector('[name="mScope"]:checked') || {}).value === 'all' ? 'all' : 'asks';
-      const has = window.PANEL.engine !== 'manual';
+      const has = !!ENG.key;
       if (!k && !has) { m.textContent = 'Pega primero la clave.'; return; }
       if (k && !/^sk-ant-[\w-]{20,}$/.test(k)) { m.textContent = 'Esa no parece una clave de la API de Anthropic (empiezan con sk-ant-).'; return; }
       try { await db.doc('private/claude').set(k ? { key: k, scope: sc, at: Date.now() } : { scope: sc }, { merge: true }); m.textContent = 'Guardado. Recargando…'; setTimeout(() => location.reload(), 600); }
@@ -261,15 +288,45 @@
     const s = mk(false); s.json = mk(true); s.limits = async () => ({}); return s;
   }
 
-  function pickSample(key, scope) {
-    const man = manualSample(); if (!key) return man;
-    const api = apiSample(key); if (scope === 'all') return api;
-    const pick = o => (o && o.kind === 'ask') ? api : man;
-    const s = (i, o) => pick(o)(i, o); s.json = (i, o) => pick(o).json(i, o); s.limits = async () => ({}); return s;
+  function pickSample() {
+    const man = manualSample(), api = ENG.key ? apiSample(ENG.key) : null, loc = localSample();
+    const choose = async o => {
+      if (api && ((o && o.kind === 'ask') || ENG.scope === 'all')) return api;
+      if (BR.on) { if (!BR.ok) await ping(900); if (BR.ok) return loc; }
+      return man;
+    };
+    const s = async (i, o) => (await choose(o))(i, o); s.json = async (i, o) => (await choose(o)).json(i, o); s.limits = async () => ({}); return s;
+  }
+  /* Claude Code de este computador, por el puente local: una consulta, una respuesta en vivo */
+  function localSample() {
+    async function run(input, opts, json) {
+      opts = opts || {}; const prompt = turnsText(input); let r;
+      try { r = await fetch(BR.url + '/ask', { method: 'POST', signal: opts.signal, headers: { 'content-type': 'application/json', 'x-panel': '1' }, body: JSON.stringify({ prompt }) }); }
+      catch (e) { if (e && e.name === 'AbortError') throw { code: 'cancelled', message: 'cancelada' }; BR.ok = false; engClass(); throw fail('bridge', 'No se pudo conectar con Claude Code en este computador. Revisa que el puente siga abierto en la Terminal.'); }
+      if (!r.ok) { let m = ''; try { m = (await r.json()).error || ''; } catch (e) { /* sin detalle */ } throw fail('bridge', 'El puente no aceptó la consulta (' + r.status + (m ? ': ' + m : '') + ').'); }
+      const reader = r.body.getReader(), dec = new TextDecoder(); let buf = '', text = '', end = null;
+      try {
+        for (;;) {
+          const { done, value } = await reader.read(); if (done) break;
+          buf += dec.decode(value, { stream: true }); let i;
+          while ((i = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!line) continue;
+            let ev; try { ev = JSON.parse(line); } catch (e) { continue; }
+            if (ev.t === 'd') { text += ev.x; if (opts.onText) opts.onText({ text, delta: ev.x }); }
+            else if (ev.t === 'end') end = ev;
+            else if (ev.t === 'err') throw Object.assign(fail('bridge', 'Claude Code no respondió: ' + ev.message), { text });
+          }
+        }
+      } catch (e) { if (e && e.name === 'AbortError') throw { code: 'cancelled', message: 'cancelada', text }; if (e && e.code) throw e; throw Object.assign(fail('bridge', 'Se cortó la conexión con el puente.'), { text }); }
+      if (!end) throw Object.assign(fail('bridge', 'El puente cerró la conexión antes de terminar.'), { text });
+      const out = end.text || text;
+      if (!json) return { text: out, truncated: !!end.truncated };
+      try { return parseLoose(out); } catch (e) { throw { code: 'invalid_json', message: 'respuesta incompleta' }; }
+    }
+    const s = (i, o) => run(i, o, false); s.json = (i, o) => run(i, o, true); return s;
   }
   function apiSample(key) {
     const MODELS = { quick: 'claude-haiku-5-5', default: 'claude-sonnet-5-5', complex: 'claude-opus-5-5' };
-    const fail = (code, userMessage) => ({ code, message: userMessage, userMessage });
     async function run(input, opts, json) {
       opts = opts || {};
       const turns = typeof input === 'string' ? [{ role: 'user', content: input }] : input.map(t => ({ role: t.role, content: t.content }));

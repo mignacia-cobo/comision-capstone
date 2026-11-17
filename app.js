@@ -222,7 +222,7 @@ function renderAI(){const t=team();if(!t){put('#ai','');return}
       ${(S.qsug.items||[]).map((q,i)=>`<div class="qcard"><div class="q">${esc(q.pregunta)}</div><div><span class="tag">${esc(q.para||'Equipo')}</span>${q.indicador?`<span class="tag">Indicador ${esc(q.indicador)}</span>`:''}<span class="hint">${esc(q.motivo||'')}</span></div>${q.added?`<span class="hint">Agregada a las preguntas del equipo</span>`:`<div><button class="btn sm" data-act="qadd" data-v="${i}" ${can?'':'disabled'}>Usar esta pregunta</button></div>`}</div>`).join('')}</div>`}
   h+=`<div class="stack" style="gap:6px"><div id="chat">${S.chat.map(m=>`<div class="msg ${m.role==='user'?'me':'ai'}">${m.role==='user'?esc(m.content):md(m.content||'…')}</div>`).join('')}</div>
     <div class="row"><input type="text" id="chatIn" placeholder="Pregunta sobre este proyecto: ¿quién hizo el módulo de pagos?, ¿hay pruebas?…" style="flex:1 1 220px"><button class="btn primary" data-act="chat" id="chatGo">Preguntar</button></div>
-    <span class="hint">${WEB.engine==='api'?'Claude responde aquí mismo.':WEB.engine==='mixed'?'Tus consultas abren una ventana para copiarlas a tu sesión de Claude y pegar la respuesta; las de la comisión se responden solas con la clave.':'Cada consulta abre una ventana para copiarla a tu sesión de Claude y pegar la respuesta.'} Lleva el informe entregado, el repositorio, los apuntes de todos los evaluadores y las preguntas registradas.</span></div>`;
+    <span class="hint">${esc(WEB.hint)} Lleva el informe entregado, el repositorio, los apuntes de todos los evaluadores y las preguntas registradas.</span></div>`;
   h+=asksHtml();
   put('#ai',h)}
 function asksHtml(){const as=S.saved.filter(x=>x.kind==='ask').sort((a,b)=>a.at-b.at),own=WEB.owner,can=cs()&&!S.readOnly;
@@ -618,7 +618,7 @@ async function askBg(id){const x=(INB.saved||[]).find(y=>y.id===id);if(!x||x.a)r
   const r=await S.sample(await askPrompt(x),{kind:'ask',modelTier:S.tier,cache:false});
   if(!r||!r.text)return false;await ref.update({a:r.text,aAt:Date.now()});return true}
 async function inbRunOne(id){const x=(INB.saved||[]).find(y=>y.id===id);if(!x||x.a||!S.sample)return;
-  if(WEB.askEngine==='api'){await askBg(id);return}
+  if(WEB.askEngine!=='manual'){await askBg(id);return}
   if(x.team!==S.team)pickTeam(x.team);S.tab='vivo';renderTabs();await waitTeam();await answerAsk(id)}
 /* con clave de API: las consultas de la comisión se responden solas, una tras otra */
 const AUTO={on:ls.get('inbAuto')!=='0',busy:false,tries:{}};
