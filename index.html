@@ -182,7 +182,18 @@ img{max-width:100%}
 .acc-row{display:grid;grid-template-columns:150px minmax(0,1fr) minmax(0,1.3fr);gap:8px;align-items:center}
 .acc-row input{width:100%}
 @media (max-width:640px){.acc-row{grid-template-columns:minmax(0,1fr)}}
-body.web label.field:has(#tier){display:none}
+body.web.eng-manual label.field:has(#tier){display:none}
+
+/* ---- bandeja y avisos ---- */
+.badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--bad);color:var(--surface);font-size:11px;font-weight:600;line-height:18px;text-align:center;vertical-align:middle}
+#inbBtn.has{border-color:var(--bad)}
+.inbox{position:fixed;top:0;right:0;bottom:0;width:min(440px,100%);z-index:40;overflow:auto;border-radius:0!important;border-width:0 0 0 1px!important;box-shadow:-8px 0 30px rgba(15,12,35,.18)}
+#toasts{position:fixed;right:16px;bottom:16px;z-index:45;display:flex;flex-direction:column;gap:10px;width:min(360px,calc(100% - 32px))}
+.toast{background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:12px 14px;box-shadow:0 8px 30px rgba(15,12,35,.22);display:flex;flex-direction:column;gap:6px}
+.toast .tt{font-weight:600}
+.toast .tx{font-size:13.5px;overflow-wrap:anywhere}
+.qcard.isnew{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.team-btn .badge{margin-left:6px}
 </style>
 </head>
 <body>
@@ -196,6 +207,7 @@ body.web label.field:has(#tier){display:none}
   <div class="seg" role="group" aria-label="Evaluación" id="evSeg"></div>
   <span class="grow"></span>
   <label class="field">Evalúo como <select id="seatSel"></select></label>
+  <button class="btn sm" id="inbBtn" data-act="inbtoggle">Bandeja</button>
   <span class="sync" id="sync" aria-live="polite"></span>
 </div></header>
 
@@ -224,6 +236,8 @@ body.web label.field:has(#tier){display:none}
   </main>
 </div>
 </div>
+<aside id="inbox" class="inbox card pad stack" hidden aria-label="Bandeja de la comisión"></aside>
+<div id="toasts" aria-live="polite"></div>
 <div id="modal" hidden></div>
 <script src="vendor/firebase-app-compat.js"></script>
 <script src="vendor/firebase-auth-compat.js"></script>

@@ -114,7 +114,7 @@ function renderTop(){
 function slotOf(tm){return(tm['slot_'+S.ev]||'').trim()}
 function sortedTeams(){return[...S.teams].sort((a,b)=>{const x=slotOf(a),y=slotOf(b);if(x&&y&&x!==y)return x<y?-1:1;if(x&&!y)return-1;if(!x&&y)return 1;return a.n-b.n})}
 function renderSide(){const ts=sortedTeams();
-  const item=t=>{const d=cs()&&S.evalDocs[evalId(cs(),t.id)];let p='';if(d){const c=calc(d,t);p=d.closed?`<span class="prog done">Cerrada</span>`:`<span class="prog">${c.set}/${c.total}</span>`}
+  const item=t=>{const d=cs()&&S.evalDocs[evalId(cs(),t.id)];let p='';if(d){const c=calc(d,t);p=d.closed?`<span class="prog done">Cerrada</span>`:`<span class="prog">${c.set}/${c.total}</span>`}{const n=WEB.owner&&INB.saved?INB.saved.filter(x=>x.kind==='ask'&&!x.a&&x.team===t.id).length:0;if(n)p+=`<span class="badge" title="Consultas pendientes para Claude">${n}</span>`}
     return`<button class="team-btn" data-act="team" data-v="${t.id}" aria-current="${S.team===t.id}"><span class="num">${t.n}</span><span class="nm">${esc(t.name)}<span class="sub">${slotOf(t)?esc(slotOf(t))+' · ':''}${esc(t.section)} · ${t.members.length} integrantes</span></span>${p}</button>`};
   const anySlot=ts.some(slotOf);
   let h='';
@@ -199,7 +199,7 @@ function ctx(light){const t=team(),e=EV(),d=S.dossier;const P=[];
   if(cs()){const dm=mine();if(Object.keys(dm.g).length||Object.keys(dm.m).length)P.push(`# NIVELES Y COMENTARIOS YA REGISTRADOS POR EL EVALUADOR\n${levelsText(t,dm)}`)}
   return P.join('\n\n')}
 const ERR={not_granted:'No se autorizó el uso de Claude en este panel.',rate_limited:'Muchas consultas seguidas o límite de uso alcanzado. Espera un momento e inténtalo de nuevo.',session_expired:'Tu sesión expiró. Vuelve a iniciar sesión.',prompt_too_large:'El expediente es demasiado largo para esta consulta.',refused:'Claude no respondió esta consulta. Prueba a reformularla.',invalid_json:'La respuesta llegó incompleta. Inténtalo de nuevo.',cancelled:''};
-const errMsg=e=>ERR[e&&e.code]??'No se pudo completar la consulta. Inténtalo de nuevo.';
+const errMsg=e=>ERR[e&&e.code]??((e&&e.userMessage)||'No se pudo completar la consulta. Inténtalo de nuevo.');
 const REC=()=>S.ev==='f2'?'Para la presentación final les recomiendo:':'Para su desarrollo profesional les recomiendo:';
 const ACTS={
   brief:{t:'Briefing antes de presentar',p:()=>`Prepara un briefing para la docente ANTES de que el equipo presente. Formato: "## Qué es" (2 líneas), "## Estado real según el repositorio" (4-6 viñetas con evidencia), "## Aporte por integrante" (una línea por persona, con commits y áreas), "## Qué pidió la retroalimentación del avance y si se ve resuelto", "## Qué verificar en la presentación" (5 viñetas, lo más riesgoso primero). Máximo 280 palabras.`},
@@ -222,17 +222,17 @@ function renderAI(){const t=team();if(!t){put('#ai','');return}
       ${(S.qsug.items||[]).map((q,i)=>`<div class="qcard"><div class="q">${esc(q.pregunta)}</div><div><span class="tag">${esc(q.para||'Equipo')}</span>${q.indicador?`<span class="tag">Indicador ${esc(q.indicador)}</span>`:''}<span class="hint">${esc(q.motivo||'')}</span></div>${q.added?`<span class="hint">Agregada a las preguntas del equipo</span>`:`<div><button class="btn sm" data-act="qadd" data-v="${i}" ${can?'':'disabled'}>Usar esta pregunta</button></div>`}</div>`).join('')}</div>`}
   h+=`<div class="stack" style="gap:6px"><div id="chat">${S.chat.map(m=>`<div class="msg ${m.role==='user'?'me':'ai'}">${m.role==='user'?esc(m.content):md(m.content||'…')}</div>`).join('')}</div>
     <div class="row"><input type="text" id="chatIn" placeholder="Pregunta sobre este proyecto: ¿quién hizo el módulo de pagos?, ¿hay pruebas?…" style="flex:1 1 220px"><button class="btn primary" data-act="chat" id="chatGo">Preguntar</button></div>
-    <span class="hint">Cada consulta abre una ventana para copiarla a tu sesión de Claude y pegar la respuesta. Lleva el informe entregado, el repositorio, los apuntes de todos los evaluadores y las preguntas registradas.</span></div>`;
+    <span class="hint">${WEB.engine==='api'?'Claude responde aquí mismo.':'Cada consulta abre una ventana para copiarla a tu sesión de Claude y pegar la respuesta.'} Lleva el informe entregado, el repositorio, los apuntes de todos los evaluadores y las preguntas registradas.</span></div>`;
   h+=asksHtml();
   put('#ai',h)}
 function asksHtml(){const as=S.saved.filter(x=>x.kind==='ask').sort((a,b)=>a.at-b.at),own=WEB.owner,can=cs()&&!S.readOnly;
   let h=`<div class="stack" style="gap:8px"><b>Consultas a Claude</b><span class="hint">Cada consulta queda con el nombre de quien la hizo y la respuesta la ve toda la comisión.</span>`;
-  h+=as.length?as.map(x=>`<div class="qcard"><div class="q">${esc(x.q)}</div><div><span class="tag">${esc(seatName(seat(x.seat))||x.seat)}</span>${x.a?'':`<span class="hint">Pendiente</span>`}</div>${x.a?`<div class="out">${md(x.a)}</div>`:''}${own||x.seat===cs()?`<div class="row">${own?`<button class="btn sm" data-act="askrun" data-v="${x.id}" ${x.busy?'disabled':''}>${x.busy?'Esperando la respuesta…':(x.a?'Volver a responder':'Responder con Claude')}</button>`:''}<button class="btn sm ghost" data-act="qdel" data-v="${x.id}">Quitar</button></div>`:''}</div>`).join(''):`<span class="hint">${own?'Cuando alguien de la comisión deje una consulta para Claude, aparecerá aquí.':'Todavía no hay consultas.'}</span>`;
+  h+=as.length?as.map(x=>`<div class="qcard"><div class="q">${esc(x.q)}</div><div><span class="tag">${esc(seatName(seat(x.seat))||x.seat)}</span>${x.a?'':`<span class="hint">Pendiente</span>`}</div>${x.a||x.busy?`<div class="out" id="ask-${x.id}">${md(x.a||'')}</div>`:''}${own||x.seat===cs()?`<div class="row">${own?`<button class="btn sm" data-act="askrun" data-v="${x.id}" ${x.busy?'disabled':''}>${x.busy?'Esperando la respuesta…':(x.a?'Volver a responder':'Responder con Claude')}</button>`:''}<button class="btn sm ghost" data-act="qdel" data-v="${x.id}">Quitar</button></div>`:''}</div>`).join(''):`<span class="hint">${own?'Cuando alguien de la comisión deje una consulta para Claude, aparecerá aquí.':'Todavía no hay consultas.'}</span>`;
   if(!own)h+=`<div class="row"><input type="text" id="askIn" placeholder="¿Quién desarrolló el módulo de pagos? ¿Hay pruebas automatizadas?…" style="flex:1 1 220px"><button class="btn primary" data-act="asknew" ${can?'':'disabled'}>Enviar consulta</button></div>`;
   return h+'</div>'}
 function addAsk(){const i=$('#askIn');const q=((i&&i.value)||'').trim();if(!q||!cs()||S.readOnly)return;i.value='';const id=newId();const d={key:key(),ev:S.ev,team:S.team,kind:'ask',q,a:'',seat:cs(),at:Date.now()};S.saved.push({id,...d});save('saved/'+id,d);renderAI()}
 async function answerAsk(id){const x=qaItem(id);if(!x||!S.sample||x.busy)return;x.busy=true;renderAI();let ok=false;
-  try{const r=await S.sample(ctx(false)+`\n\n# TAREA\n${seatName(seat(x.seat))||'Un integrante de la comisión'} hace esta consulta sobre el equipo: ${x.q}\nResponde en pocas líneas, con la evidencia y de dónde sale.`,{modelTier:S.tier,cache:false});x.a=r.text;x.aAt=Date.now();ok=true}
+  try{const r=await S.sample(ctx(false)+`\n\n# TAREA\n${seatName(seat(x.seat))||'Un integrante de la comisión'} hace esta consulta sobre el equipo: ${x.q}\nResponde en pocas líneas, con la evidencia y de dónde sale.`,{modelTier:S.tier,cache:false,onText:({text})=>{const e=$('#ask-'+x.id);if(e)e.innerHTML=md(text)}});x.a=r.text;x.aAt=Date.now();ok=true}
   catch(e){if(e&&e.code!=='cancelled')setSync(errMsg(e))}
   x.busy=false;if(ok){const d=qaData(x);delete d.busy;save('saved/'+id,d)}renderAI()}
 async function chatSend(){const inp=$('#chatIn');const q=(inp.value||'').trim();if(!q||!S.sample||S.chatBusy)return;inp.value='';S.chatBusy=true;
@@ -458,11 +458,11 @@ function subEvals(){unEv&&unEv();S.evalDocs={};if(!S.db)return;
     renderSide();if(S.tab==='rubrica')renderRubric();renderPauta();renderCurso()},e=>setSync('Sin conexión'))}
 function subTeam(){unTeam.forEach(u=>u());unTeam=[];S.notesDocs={};S.saved=[];S.dossier=null;S.dossierState='loading';S.myNotes=null;S.mine=null;S.out=null;S.chat=[];S.sugg=null;S.suggErr='';S.closeMsg='';S.qsug=null;
   if(!S.team)return;if(!S.db){S.dossierState='none';return}const k=key();
-  unTeam.push(S.db.collection('notes').where('ev','==',S.ev).where('key','==',k).onSnapshot(sn=>{const o={};sn.docs.forEach(d=>o[d.id]=d.data());S.notesDocs=o;
+  unTeam.push(S.db.collection('notes').where('ev','==',S.ev).where('key','==',k).onSnapshot(sn=>{const o={};sn.docs.forEach(d=>o[d.id]=d.data());S.notesDocs=o;S.notesKey=k;
     if(cs()){const id=`${k}_${cs()}`;if(!dirty('notes/'+id)){const fresh=clone(o[id]||notesBlank());const a=document.activeElement;const typing=a&&(a.id==='nText'||a.id==='nTr');
       if(!S.myNotes||!typing){S.myNotes=fresh;const x=$('#nText'),y=$('#nTr');if(x&&!typing){x.value=fresh.text||'';y.value=fresh.transcript||''}}}}
     renderOthers()},()=>{}));
-  unTeam.push(S.db.collection('saved').where('ev','==',S.ev).where('key','==',k).onSnapshot(sn=>{const loc=new Map(S.saved.map(x=>[x.id,x]));
+  unTeam.push(S.db.collection('saved').where('ev','==',S.ev).where('key','==',k).onSnapshot(sn=>{S.savedKey=k;const loc=new Map(S.saved.map(x=>[x.id,x]));
     S.saved=sn.docs.map(d=>{const l=loc.get(d.id);return dirty('saved/'+d.id)&&l?l:{id:d.id,...d.data(),busy:l&&l.busy}});
     S.saved.push(...[...loc.values()].filter(l=>dirty('saved/'+l.id)&&!S.saved.some(x=>x.id===l.id)));
     renderQA();renderPauta();renderAI()},()=>{}));
@@ -475,7 +475,7 @@ function pickTeam(id){if(S.dict&&S.dictState!=='idle')S.dict.stop().catch(()=>{}
 /* ---------- eventos ---------- */
 document.addEventListener('click',ev=>{const b=ev.target.closest('[data-act]');if(!b)return;const a=b.dataset.act,v=b.dataset.v;
   if(b.tagName==='A')ev.preventDefault();
-  if(a==='ev'){if(!WEB.owner)return;S.ev=v;ls.set('ev',v);subEvals();subTeam();renderAll()}
+  if(a==='ev'){if(!WEB.owner)return;S.ev=v;ls.set('ev',v);subEvals();subTeam();subInbox();renderAll()}
   else if(a==='team'){pickTeam(v);if(S.tab==='curso'){S.tab='vivo';renderTabs()}}
   else if(a==='tab'){S.tab=v;renderTabs();if(v==='rubrica')renderRubric()}
   else if(a==='ex'){S.ex=v;renderDossier()}
@@ -501,6 +501,12 @@ document.addEventListener('click',ev=>{const b=ev.target.closest('[data-act]');i
   else if(a==='qgen')genQuestions();
   else if(a==='asknew')addAsk();
   else if(a==='askrun')answerAsk(v);
+  else if(a==='inbtoggle'){if(INB.open)inbClose();else{INB.open=true;$('#inbox').hidden=false;renderInbox()}}
+  else if(a==='inbrun'){inbDrop(b.dataset.k);inbRun(v)}
+  else if(a==='inball')inbAll();
+  else if(a==='inbgo'){inbDrop(b.dataset.k);inbClose();pickTeam(v);S.tab='vivo';renderTabs()}
+  else if(a==='inbq'){inbClose();pickTeam(v);S.tab='vivo';renderTabs();waitTeam().then(genQuestions)}
+  else if(a==='inbx')inbDrop(b.dataset.k);
   else if(a==='qadd'){const q=S.qsug.items[Number(v)];if(q){addQA(q.pregunta,q.para,q.indicador);q.added=true;renderAI()}}
   else if(a==='qnew'){const i=$('#qNew');const q=(i.value||'').trim();if(q){i.value='';addQA(q)}}
   else if(a==='qan')analyze(v);
@@ -527,6 +533,7 @@ document.addEventListener('input',ev=>{const el=ev.target,a=el.dataset&&el.datas
 });
 document.addEventListener('change',ev=>{const el=ev.target;
   if(el.id==='seatSel'){if(S.ev==='f2'||!WEB.owner)return;S.seat=el.value||null;ls.set('seat',S.seat||'');subTeam();renderAll()}
+  else if(el.id==='inbSound'){INB.sound=el.checked;ls.set('inbSound',el.checked?'1':'0');if(el.checked)inbBeep(true)}
   else if(el.id==='teamSel')pickTeam(el.value);
   else if(el.id==='tier'){S.tier=el.value;ls.set('tier',S.tier)}});
 document.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&ev.target.id==='chatIn'){ev.preventDefault();chatSend()}if(ev.key==='Enter'&&ev.target.id==='askIn'){ev.preventDefault();addAsk()}if(ev.key==='Enter'&&ev.target.id==='qNew'){ev.preventDefault();$('[data-act="qnew"]').click()}});
@@ -550,5 +557,54 @@ async function boot(){renderAll();const C=window.claude;const use=n=>C&&C.use?C.
     renderSide();if(!typing)renderHead();renderCurso()},()=>setSync('Sin conexión'));
   db.doc('config/seats').onSnapshot(d=>{if(dirty('config/seats'))return;const got=d.exists&&Array.isArray(d.data().seats)?d.data().seats:[];
     S.seats=SEATS0.map(s=>({...s,name:(got.find(x=>x.id===s.id)||{}).name||''}));renderTop();renderSide();renderPauta();renderCurso()},()=>{});
-  subEvals();subTeam();renderAll()}
+  subEvals();subTeam();subInbox();renderAll()}
+
+/* ---------- bandeja: lo que agrega la comisión, en vivo ---------- */
+const INB={saved:null,notes:null,seen:Number(ls.get('inbSeen')||0),open:false,toasts:[],noteToast:{},un:[],busy:null,sound:ls.get('inbSound')==='1'};
+const tname=id=>{const t=S.teams.find(x=>x.id===id);return t?t.name:id};
+const who=sid=>{const s=seat(sid);return s?(s.name||s.label):sid};
+function subInbox(){INB.un.forEach(u=>u());INB.un=[];INB.saved=null;INB.notes=null;if(!S.db)return;
+  INB.un.push(S.db.collection('saved').where('ev','==',S.ev).onSnapshot(sn=>{const prev=INB.saved;INB.saved=sn.docs.map(d=>({id:d.id,...d.data()}));if(prev)inbDiffSaved(prev);renderInbox()},()=>{}));
+  INB.un.push(S.db.collection('notes').where('ev','==',S.ev).onSnapshot(sn=>{const prev=INB.notes;INB.notes=sn.docs.map(d=>({id:d.id,...d.data()}));if(prev)inbDiffNotes(prev);renderInbox()},()=>{}))}
+function inbItems(){const me=cs(),out=[];
+  (INB.saved||[]).forEach(x=>{
+    if(x.kind==='ask')out.push({id:x.id,type:'ask',team:x.team,seat:x.seat,at:x.a?(x.aAt||x.at):x.at,text:x.q,a:x.a||'',pending:!x.a,mine:x.seat===me});
+    else if(x.kind==='qa'&&x.seat!==me)out.push({id:x.id,type:'qa',team:x.team,seat:x.seat,at:x.at,text:x.q});
+    else if(x.kind==='feedback'&&x.seat!==me)out.push({id:x.id,type:'fb',team:x.team,seat:x.seat,at:x.at,text:x.title||'Feedback'})});
+  (INB.notes||[]).forEach(n=>{const t=((n.text||'').trim()||(n.transcript||'').trim());if(n.seat!==me&&t)out.push({id:'n_'+n.id,type:'note',team:n.team,seat:n.seat,at:n.at||0,text:t.length>220?'…'+t.slice(-220):t})});
+  return out.sort((a,b)=>b.at-a.at)}
+function inbIsNew(x){if(x.at<=INB.seen)return false;if(x.type==='ask')return x.pending?!x.mine:!WEB.owner;return true}
+function inbPending(){return WEB.owner?inbItems().filter(x=>x.type==='ask'&&x.pending):[]}
+function inbCount(){const it=inbItems();const pend=WEB.owner?it.filter(x=>x.type==='ask'&&x.pending).length:0;const nw=it.filter(x=>inbIsNew(x)&&!(WEB.owner&&x.type==='ask'&&x.pending)).length;return pend+nw}
+function inbDiffSaved(prev){const pm=new Map(prev.map(x=>[x.id,x])),me=cs();
+  INB.saved.forEach(x=>{const p=pm.get(x.id);
+    if(!p){if(x.seat===me)return;
+      if(x.kind==='ask'&&!x.a)toast({type:'ask',id:x.id,team:x.team,title:`${who(x.seat)} dejó una consulta para Claude`,text:x.q});
+      else if(x.kind==='ask')toast({type:'ans',id:x.id,team:x.team,title:`${who(x.seat)} consultó a Claude`,text:x.q});
+      else if(x.kind==='qa')toast({type:'qa',id:x.id,team:x.team,title:`${who(x.seat)} agregó una pregunta al equipo`,text:x.q})}
+    else if(x.kind==='ask'&&x.a&&!p.a&&!WEB.owner)toast({type:'ans',id:x.id,team:x.team,title:x.seat===me?'Claude respondió tu consulta':`Claude respondió la consulta de ${who(x.seat)}`,text:x.q})})}
+function inbDiffNotes(prev){const pm=new Map(prev.map(x=>[x.id,x])),me=cs(),now=Date.now();const len=d=>d?((d.text||'').length+(d.transcript||'').length):0;
+  INB.notes.forEach(n=>{if(n.seat===me)return;const p=pm.get(n.id);
+    if(len(n)>len(p)&&now-(INB.noteToast[n.id]||0)>90000){INB.noteToast[n.id]=now;toast({type:'note',id:'n_'+n.id,team:n.team,title:`${who(n.seat)} está tomando apuntes`,text:((n.text||'').trim()||(n.transcript||'').trim()).slice(-140)})}})}
+function inbBeep(force){if(!INB.sound&&!force)return;try{const C=window.AudioContext||window.webkitAudioContext;const a=inbBeep.c||(inbBeep.c=new C());const o=a.createOscillator(),g=a.createGain();o.frequency.value=880;g.gain.setValueAtTime(.0001,a.currentTime);g.gain.exponentialRampToValueAtTime(.12,a.currentTime+.02);g.gain.exponentialRampToValueAtTime(.0001,a.currentTime+.35);o.connect(g);g.connect(a.destination);o.start();o.stop(a.currentTime+.36)}catch(e){}}
+function toast(t){t.k=newId();INB.toasts.push(t);if(INB.toasts.length>4)INB.toasts.shift();renderToasts();inbBeep();setTimeout(()=>inbDrop(t.k),t.type==='ask'?45000:14000)}
+function inbDrop(k){if(!k)return;INB.toasts=INB.toasts.filter(x=>x.k!==k);renderToasts()}
+function renderToasts(){const el=$('#toasts');if(!el)return;el.innerHTML=INB.toasts.map(t=>`<div class="toast" role="status"><div class="tt">${esc(t.title)}</div><div class="hint">${esc(tname(t.team))}</div><div class="tx">${esc(t.text)}</div><div class="row">${t.type==='ask'&&WEB.owner&&S.sample?`<button class="btn primary sm" data-act="inbrun" data-v="${t.id}" data-k="${t.k}">Responder con Claude</button>`:''}<button class="btn sm" data-act="inbgo" data-v="${t.team}" data-k="${t.k}">Ver equipo</button><button class="btn sm ghost" data-act="inbx" data-k="${t.k}">Cerrar</button></div></div>`).join('')}
+function renderInbox(){const n=inbCount(),b=$('#inbBtn');if(b){b.innerHTML=`Bandeja${n?` <span class="badge">${n}</span>`:''}`;b.classList.toggle('has',n>0)}
+  document.title=(n?`(${n}) `:'')+'Comisión CAPSTONE';renderSide();
+  const el=$('#inbox');if(!el||!INB.open)return;const it=inbItems();
+  const pend=WEB.owner?it.filter(x=>x.type==='ask'&&x.pending):[],rest=it.filter(x=>!pend.includes(x)).slice(0,40);
+  const LBL={ask:'Consulta para Claude',qa:'Pregunta al equipo',note:'Apuntes',fb:'Feedback guardado'};
+  const card=x=>`<div class="qcard ${inbIsNew(x)?'isnew':''}"><div class="row" style="justify-content:space-between"><span><span class="tag">${LBL[x.type]}</span><span class="tag">${esc(who(x.seat))}</span></span><span class="hint">${esc(tname(x.team))} · ${esc(fdate(x.at))}</span></div><div class="q">${esc(x.text)}</div>${x.type==='ask'&&x.a?`<div class="out">${md(x.a)}</div>`:''}${x.type==='ask'&&x.pending&&!WEB.owner?`<span class="hint">Pendiente de respuesta</span>`:''}<div class="row">${x.type==='ask'&&x.pending&&WEB.owner&&S.sample?`<button class="btn primary sm" data-act="inbrun" data-v="${x.id}" ${INB.busy?'disabled':''}>${INB.busy===x.id?'Respondiendo…':'Responder con Claude'}</button>`:''}${x.type==='note'&&WEB.owner&&S.sample?`<button class="btn sm" data-act="inbq" data-v="${x.team}">Sugerir preguntas con Claude</button>`:''}<button class="btn sm" data-act="inbgo" data-v="${x.team}">Ver equipo</button></div></div>`;
+  put(el,`<div class="row" style="justify-content:space-between"><h2>Bandeja de la comisión</h2><button class="btn sm" data-act="inbtoggle">Cerrar</button></div>
+    <label class="field"><input type="checkbox" id="inbSound" ${INB.sound?'checked':''}> Avisar con sonido</label>
+    ${WEB.owner?`<div class="stack" style="gap:8px"><div class="row" style="justify-content:space-between"><b>Consultas pendientes (${pend.length})</b>${pend.length>1&&S.sample?`<button class="btn sm" data-act="inball" ${INB.busy?'disabled':''}>Responder todas</button>`:''}</div>${pend.length?pend.map(card).join(''):`<span class="hint">No hay consultas pendientes.</span>`}</div>`:''}
+    <div class="stack" style="gap:8px"><b>Actividad reciente</b>${rest.length?rest.map(card).join(''):`<span class="hint">Aquí aparece en vivo lo que agregan los demás evaluadores: apuntes, preguntas al equipo y consultas para Claude.</span>`}</div>`)}
+function inbClose(){if(!INB.open)return;INB.open=false;$('#inbox').hidden=true;INB.seen=Date.now();ls.set('inbSeen',String(INB.seen));renderInbox()}
+function waitTeam(){return new Promise(r=>{const t0=Date.now();const iv=setInterval(()=>{if((S.savedKey===key()&&S.notesKey===key()&&S.dossierState!=='loading')||Date.now()-t0>9000){clearInterval(iv);r()}},120)})}
+async function inbRunOne(id){const x=(INB.saved||[]).find(y=>y.id===id);if(!x||x.a||!S.sample)return;
+  if(x.team!==S.team)pickTeam(x.team);S.tab='vivo';renderTabs();await waitTeam();await answerAsk(id)}
+async function inbRun(id){if(INB.busy)return;INB.busy=id;renderInbox();try{await inbRunOne(id)}catch(e){}INB.busy=null;renderInbox()}
+async function inbAll(){if(INB.busy)return;const ids=inbPending().map(x=>x.id).reverse();for(const id of ids){INB.busy=id;renderInbox();try{await inbRunOne(id)}catch(e){}const x=(INB.saved||[]).find(y=>y.id===id);const loc=qaItem(id);if(!(loc&&loc.a)&&!(x&&x.a))break}INB.busy=null;renderInbox()}
+
 boot();

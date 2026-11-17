@@ -102,13 +102,15 @@
     let RUB, LVIDX;
     try { RUB = JSON.parse(rub.data().json); LVIDX = JSON.parse(rub.data().lvidx); }
     catch (e) { return gateError({ message: 'Las rúbricas guardadas no se pueden leer. Vuelve a cargar el archivo de datos.' }); }
-    window.PANEL = { mode: 'web', owner, seat: owner ? 'doc' : seat, email, name: user.displayName || email };
+    let apiKey = '';
+    if (owner) { try { const c = await db.doc('private/claude').get(); if (c.exists && c.data().key) apiKey = String(c.data().key); } catch (e) { /* sin clave: copiar y pegar */ } }
+    window.PANEL = { mode: 'web', owner, seat: owner ? 'doc' : seat, email, name: user.displayName || email, engine: owner ? (apiKey ? 'api' : 'manual') : 'none' };
     window.PANEL_DATA = { RUB, LVIDX, TPL_F2: tpl.exists ? tpl.data().b64 : '' };
-    const services = { db, user: userSvc(user, owner), sample: owner ? manualSample() : null, dictation: makeDictation(), downloads };
+    const services = { db, user: userSvc(user, owner), sample: owner ? (apiKey ? apiSample(apiKey) : manualSample()) : null, dictation: makeDictation(), downloads };
     window.claude = { use: n => Promise.resolve(services[n] || null) };
     if (started) return; started = true;
     const s = document.createElement('script'); s.src = 'app.js';
-    s.onload = () => { gate.hidden = true; $('#app').hidden = false; document.body.classList.add('web', owner ? 'is-owner' : 'is-member'); topButton(); };
+    s.onload = () => { gate.hidden = true; $('#app').hidden = false; document.body.classList.add('web', owner ? 'is-owner' : 'is-member', 'eng-' + window.PANEL.engine); topButton(); };
     s.onerror = () => gateError({ message: 'No se pudo cargar app.js.' });
     document.body.appendChild(s);
   }
@@ -151,8 +153,19 @@
         <label class="field" style="flex-wrap:wrap">Cargar o actualizar equipos y expedientes <input type="file" id="mSeed" accept=".json,application/json"></label>
         <span class="hint" id="mProg">Usa el archivo de datos que te entrega Claude. No borra evaluaciones, apuntes ni horarios.</span>
         <div class="row"><button class="btn" id="mBackup">Descargar respaldo de las evaluaciones</button></div></div>
+      <div class="stack" style="gap:8px"><b>Consultas a Claude</b>
+        <span class="hint">${window.PANEL.engine === 'api' ? 'Activo: las consultas se responden solas, con tu clave de la API de Anthropic.' : 'Ahora cada consulta se copia y se pega en tu sesión de Claude. Para que se respondan solas con un clic, pega aquí una clave de la API de Anthropic (se crea en console.anthropic.com y se paga por uso: centavos por consulta). Se guarda en tu proyecto de Firebase y solo tú puedes leerla.'}</span>
+        <div class="row"><input type="password" id="mKey" placeholder="sk-ant-…" autocomplete="off" aria-label="Clave de la API de Anthropic" style="flex:1 1 220px"><button class="btn" id="mKeySave">Guardar clave</button>${window.PANEL.engine === 'api' ? '<button class="btn ghost" id="mKeyDel">Quitar clave</button>' : ''}</div>
+        <span class="hint" id="mKeyMsg" aria-live="polite"></span></div>
       <div class="row" style="justify-content:space-between"><span class="hint">${esc(window.PANEL.email)}</span><span class="row"><button class="btn" id="mOut">Cerrar sesión</button><button class="btn" id="mX">Volver al panel</button></span></div>`);
     $('#mX').onclick = () => closeModal(); $('#mOut').onclick = signOut;
+    $('#mKeySave').onclick = async () => {
+      const k = $('#mKey').value.trim(), m = $('#mKeyMsg');
+      if (!/^sk-ant-[\w-]{20,}$/.test(k)) { m.textContent = 'Esa no parece una clave de la API de Anthropic (empiezan con sk-ant-).'; return; }
+      try { await db.doc('private/claude').set({ key: k, at: Date.now() }); m.textContent = 'Clave guardada. Recargando…'; setTimeout(() => location.reload(), 600); }
+      catch (e) { m.textContent = 'No se pudo guardar (' + (e.code || e.message) + ').'; }
+    };
+    if ($('#mKeyDel')) $('#mKeyDel').onclick = async () => { try { await db.doc('private/claude').delete(); location.reload(); } catch (e) { $('#mKeyMsg').textContent = 'No se pudo quitar (' + (e.code || e.message) + ').'; } };
     $('#mSave').onclick = async () => {
       const msg = $('#mMsg'), rows = [...modal.querySelectorAll('.acc-row')];
       const newSeats = [], want = new Map();
@@ -231,8 +244,62 @@
       };
       if (opts && opts.signal) opts.signal.addEventListener('abort', () => { if (!done) closeModal(); });
       $('#manualCopy').focus();
+      navigator.clipboard && navigator.clipboard.writeText(prompt).then(() => { const b = $('#manualCopy'); if (b) b.textContent = 'Copiada: pégala en Claude'; }).catch(() => { });
+      const onFocus = async () => {
+        const ta = $('#manualAnswer'); if (done || !ta) { window.removeEventListener('focus', onFocus); return; }
+        if (ta.value.trim()) return;
+        try { const t = (await navigator.clipboard.readText()).trim(); if (t && t !== prompt.trim() && $('#manualAnswer') && !$('#manualAnswer').value.trim()) { $('#manualAnswer').value = t; err(''); $('#manualUse').focus(); } } catch (e) { /* sin permiso para leer el portapapeles: se pega a mano */ }
+      };
+      window.addEventListener('focus', onFocus);
     });
     const s = mk(false); s.json = mk(true); s.limits = async () => ({}); return s;
+  }
+
+  function apiSample(key) {
+    const MODELS = { quick: 'claude-haiku-5-5', default: 'claude-sonnet-5-5', complex: 'claude-opus-5-5' };
+    const fail = (code, userMessage) => ({ code, message: userMessage, userMessage });
+    async function run(input, opts, json) {
+      opts = opts || {};
+      const turns = typeof input === 'string' ? [{ role: 'user', content: input }] : input.map(t => ({ role: t.role, content: t.content }));
+      const first = turns[0].content, cut = turns.length === 1 ? first.lastIndexOf('\n\n# TAREA') : -1;
+      /* el expediente va primero y se marca para caché: las consultas siguientes sobre el mismo equipo cuestan menos */
+      turns[0] = { role: 'user', content: cut > 0 ? [{ type: 'text', text: first.slice(0, cut), cache_control: { type: 'ephemeral' } }, { type: 'text', text: first.slice(cut + 2) }] : [{ type: 'text', text: first, cache_control: { type: 'ephemeral' } }] };
+      let r;
+      try {
+        r = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST', signal: opts.signal,
+          headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+          body: JSON.stringify({ model: MODELS[opts.modelTier] || MODELS.default, max_tokens: json ? 8000 : 3000, stream: true, messages: turns })
+        });
+      } catch (e) { throw e && e.name === 'AbortError' ? { code: 'cancelled', message: 'cancelada' } : fail('network', 'No se pudo conectar con Claude. Revisa tu conexión.'); }
+      if (!r.ok) {
+        let msg = ''; try { msg = ((await r.json()).error || {}).message || ''; } catch (e) { /* sin detalle */ }
+        if (r.status === 401) throw fail('api_key', 'La clave de la API no es válida. Revísala en "Comisión y datos".');
+        if (r.status === 429) throw { code: 'rate_limited', message: msg };
+        if (r.status === 413 || /too long|too large/i.test(msg)) throw { code: 'prompt_too_large', message: msg };
+        if (/credit balance/i.test(msg)) throw fail('credit', 'La cuenta de la API no tiene saldo. Agrégalo en console.anthropic.com.');
+        throw fail('api', 'Claude no pudo responder (' + r.status + (msg ? ': ' + msg.slice(0, 140) : '') + ').');
+      }
+      const reader = r.body.getReader(), dec = new TextDecoder(); let buf = '', text = '', truncated = false;
+      try {
+        for (;;) {
+          const { done, value } = await reader.read(); if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let i;
+          while ((i = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+            if (!line.startsWith('data:')) continue;
+            let ev; try { ev = JSON.parse(line.slice(5)); } catch (e) { continue; }
+            if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { text += ev.delta.text; if (opts.onText) opts.onText({ text, delta: ev.delta.text }); }
+            else if (ev.type === 'message_delta' && ev.delta && ev.delta.stop_reason === 'max_tokens') truncated = true;
+            else if (ev.type === 'error') throw fail('api', 'Claude interrumpió la respuesta' + (ev.error && ev.error.message ? ': ' + ev.error.message.slice(0, 140) : '.'));
+          }
+        }
+      } catch (e) { if (e && e.name === 'AbortError') throw { code: 'cancelled', message: 'cancelada', text }; if (e && e.code) { e.text = text; throw e; } throw Object.assign(fail('network', 'Se cortó la conexión con Claude.'), { text }); }
+      if (!json) return { text, truncated };
+      try { return parseLoose(text); } catch (e) { throw { code: 'invalid_json', message: 'respuesta incompleta' }; }
+    }
+    const s = (i, o) => run(i, o, false); s.json = (i, o) => run(i, o, true); s.limits = async () => ({}); return s;
   }
 
   /* ---------- dictado con el reconocimiento de voz del navegador ---------- */
