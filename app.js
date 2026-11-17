@@ -25,7 +25,7 @@ const S={ev:ls.get('ev')||'f2',team:ls.get('team')||null,seat:ls.get('seat')||nu
   dictState:'idle',dictTarget:null,dictPartial:'',timer:{run:false,start:0,acc:0},readerHtml:''};
 if(WEB.owner){if(!S.seat)S.seat='doc'}else{S.ev='f3';S.seat=WEB.seat}
 const EV=()=>RUB[S.ev];
-Object.assign(S,{sideMin:ls.get('sidemin')==='1',rubMin:ls.get('rubmin')==='1',rubWide:ls.get('rubwide')==='1',paneMin:ls.get('panemin')||'',fs:Number(ls.get('fs'))||15,qgen:false,qall:false,qerr:'',qclean:false,findI:-1,toc:ls.get('toc')!=='0'});
+Object.assign(S,{sideMin:ls.get('sidemin')==='1',rubMin:ls.get('rubmin')==='1',rubWide:ls.get('rubwide')==='1',paneMin:ls.get('panemin')||'',fs:Number(ls.get('fs'))||15,qgen:false,qall:false,qerr:'',qclean:false,findI:-1,toc:ls.get('toc')!=='0',headMin:ls.get('headmin')!=null?ls.get('headmin')==='1':window.innerHeight<780});
 const isOwn=()=>typeof WEB==='undefined'||!!WEB.owner; /* en el artifact siempre; en la versión web solo la docente */
 const canQ=x=>isOwn()||x.seat===cs();
 const cs=()=>S.ev==='f2'?'doc':S.seat; /* en Fase 2 evalúa solo el docente de la asignatura */
@@ -142,7 +142,8 @@ function renderSide(){const ts=sortedTeams();
 function avaTag(t,m){if(S.ev!=='f2'||!t.ava_f2||!t.ava_f2.m)return'';const v=t.ava_f2.m[m.id]||'';return v?` <span class="hint">· AVA: ${esc(v.startsWith('Enviado')?'enviado':v.toLowerCase())}</span>`:''}
 function renderHead(){const t=team();if(!t){put('#head',`<div class="empty">${S.ready?'Elige un equipo de la lista para empezar.':'Cargando…'}</div>`);return}
   const f1=t.f1||{},f2=t.f2a||{};
-  put('#head',`<div class="eyebrow">Equipo ${t.n} · Sección ${esc(t.section)}</div>
+  if(S.headMin){put('#head',`<div class="hd-min"><span class="eyebrow">Equipo ${t.n} · ${esc(t.section)}${slotOf(t)?' · '+esc(slotOf(t)):''}${salaOf(t)?' · '+esc(salaOf(t)):''}</span><h1>${esc(t.name)}</h1><span class="hint">${t.members.map(m=>esc(first(m.name))).join(' · ')}</span><button class="btn sm ghost" data-act="headmin" title="Ver integrantes, notas previas, repositorio, hora y sala">Detalles ▾</button></div>`);tick();return}
+  put('#head',`<div class="col-h"><div class="eyebrow">Equipo ${t.n} · Sección ${esc(t.section)}</div><button class="btn sm ghost" data-act="headmin" title="Dejar solo el nombre del equipo para ganar espacio">Compactar ▴</button></div>
     <div class="hd-t"><h1>${esc(t.name)}</h1><div class="chips">${t.members.map(m=>`<span class="chip">${esc(m.name)}${avaTag(t,m)}</span>`).join('')}</div></div>
     <div class="meta"><span>Fase 1 grupal <b>${fmt1(f1.grupal)}</b></span><span>Avance Fase 2 <b>${f2.entrego===false?'sin entrega (1,0)':fmt1(f2.nota)}</b></span>
       ${(t.repos||[]).map((r,i)=>`<a href="${esc(r)}" target="_blank" rel="noopener">Repositorio${t.repos.length>1?' '+(i+1):''} ↗</a>`).join('')}
@@ -485,7 +486,8 @@ function renderDossier(){const el=$('#tab-expediente'),t=team();
       <section class="card pad stack"><h2>Últimos commits</h2><div class="tblw"><table><thead><tr><th>Fecha</th><th>Autor</th><th>Mensaje</th></tr></thead><tbody>${rc.map(m=>`<tr><td style="white-space:nowrap">${m[1]}</td><td>${esc(m[2])}</td><td>${esc(m[3])}</td></tr>`).join('')}</tbody></table></div></section>
       <div class="two"><section class="card pad stack"><h2>Carpetas</h2><div class="tree">${String(r.tree||'').split('\n').filter(Boolean).map(l=>{const parts=l.replace(/\/ \(\d+\)$/,'').split('/');const cnt=(l.match(/\((\d+)\)$/)||[])[1]||'';return`<span style="padding-left:${(parts.length-1)*16}px">${esc(parts[parts.length-1])}/ <span class="hint">${cnt}</span></span>`}).join('')}</div></section>
       <section class="card pad stack"><h2>Documentos</h2><ul class="files">${String(r.docs||'').split('\n').filter(Boolean).map(l=>`<li>${esc(l)}</li>`).join('')}</ul></section></div>
-`})}
+
+      ${r.readme?`<section class="card pad stack"><h2>README</h2><article class="reader" style="font-size:${S.fs}px">${rich(r.readme).html}</article></section>`:''}`})}
   else if(S.ex==='readme'){const rs=(d.repos||[]).filter(r=>String(r.readme||'').trim());const txt=rs.map(r=>((d.repos||[]).length>1?`# ${r.url}\n\n`:'')+r.readme).join('\n\n');const inn=/innovaci/i.test(txt);
     h+=`<section class="card pad stack">${reader('README','README del repositorio',txt,'El repositorio no tiene README o no se pudo leer.')}
       ${rs.length?`<div class="banner ${inn?'ok':''}">${inn?'El punto de innovación va en el README: aparece mencionado en este texto.':'El punto de innovación va en el README y no aparece en el texto leído. Revisa el repositorio en línea por si está más abajo o en otro archivo.'} ${(d.repos||[]).map(r=>`<a href="${esc(r.url)}#readme" target="_blank" rel="noopener">Abrir en GitHub ↗</a>`).join(' ')}</div>`:''}</section>`}
@@ -535,6 +537,7 @@ document.addEventListener('click',ev=>{const b=ev.target.closest('[data-act]');i
   if(a==='ev'){if(!WEB.owner)return;S.ev=v;ls.set('ev',v);subEvals();subTeam();subInbox();renderAll()}
   else if(a==='team'){pickTeam(v);if(S.tab==='curso'){S.tab='trabajo';renderTabs()}}
   else if(a==='tab'){S.tab=v;renderTabs()}
+  else if(a==='headmin'){S.headMin=!S.headMin;ls.set('headmin',S.headMin?'1':'0');renderHead()}
   else if(a==='sidemin'){S.sideMin=!S.sideMin;ls.set('sidemin',S.sideMin?'1':'0');renderSide();layout()}
   else if(a==='rubmin'){S.rubMin=!S.rubMin;ls.set('rubmin',S.rubMin?'1':'0');layout();if(!S.rubMin)renderRubric()}
   else if(a==='rubwide'){S.rubWide=!S.rubWide;ls.set('rubwide',S.rubWide?'1':'0');layout()}

@@ -132,9 +132,20 @@ mark.cur{background:var(--accent);color:var(--accent-fg);outline-color:var(--acc
 .hd-t{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin-top:2px}
 .hd-t .chips{margin-top:0}
 .vgrid{display:grid;gap:12px;align-items:start;grid-template-columns:minmax(0,1fr)}
-@container (min-width:600px){.vgrid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .vgrid #notes{grid-column:1;grid-row:1} .vgrid #ai{grid-column:1;grid-row:2} .vgrid #qa{grid-column:2;grid-row:1 / span 2}}
+@container (min-width:520px){.vgrid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .vgrid #notes{grid-column:1;grid-row:1} .vgrid #ai{grid-column:1;grid-row:2} .vgrid #qa{grid-column:2;grid-row:1 / span 2}}
 @container (min-width:980px){.vgrid{grid-template-columns:repeat(3,minmax(0,1fr))} .vgrid #notes,.vgrid #qa,.vgrid #ai{grid-row:1} .vgrid #qa{grid-column:2} .vgrid #ai{grid-column:3}}
 #head h1{font-size:20px}
+.top-in{max-width:none!important;padding-block:6px!important;gap:6px 12px!important}
+#seatSel{max-width:210px}
+.seg button{padding:5px 11px}
+.hd-min{display:flex;flex-wrap:nowrap;gap:2px 12px;align-items:baseline}
+.hd-min>*{flex:none}
+.hd-min .hint{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hd-min h1{max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hd-min h1{font-size:17px!important}
+.hd-min .btn{margin-left:auto}
+#head.pad{padding:8px 14px!important}
+@media (max-height:800px){.brand small{display:none} .wrap{padding-top:8px;gap:10px} #main{gap:8px} .tabrow{margin-bottom:8px} .pane-b{padding:10px}}
 .doc.toc-off{grid-template-columns:minmax(0,1fr)}
 .doc.toc-off .doc-toc{display:none}
 #pane-exp .pane-h h2{display:none}
@@ -283,7 +294,7 @@ body.web.eng-manual label.field:has(#tier),body.web.eng-mixed label.field:has(#t
     <section class="card pad" id="head"></section>
     <div id="center">
       <div class="tabrow"><div class="tabs" role="tablist" id="tabs"></div>
-        <div class="timer" title="Tiempo de presentación: máximo 20:00"><span class="lbl">Presentación</span><span class="clock" id="clock">20:00</span><button class="btn primary sm" data-act="tgo" id="tgo">Iniciar</button><button class="btn sm" data-act="treset">Reiniciar</button></div></div>
+        <div class="timer" title="Tiempo de presentación: máximo 20:00"><span class="clock" id="clock">20:00</span><button class="btn primary sm" data-act="tgo" id="tgo">Iniciar</button><button class="btn sm" data-act="treset" title="Reiniciar el cronómetro" aria-label="Reiniciar el cronómetro">↺</button></div></div>
       <div id="tab-trabajo" class="tabpane">
         <section class="pane" id="pane-exp" aria-label="Expediente">
           <div class="pane-h"><h2>Expediente</h2><div class="seg sm" id="exTabs" role="group" aria-label="Sección del expediente"></div>
