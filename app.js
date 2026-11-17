@@ -222,7 +222,7 @@ function renderAI(){const t=team();if(!t){put('#ai','');return}
       ${(S.qsug.items||[]).map((q,i)=>`<div class="qcard"><div class="q">${esc(q.pregunta)}</div><div><span class="tag">${esc(q.para||'Equipo')}</span>${q.indicador?`<span class="tag">Indicador ${esc(q.indicador)}</span>`:''}<span class="hint">${esc(q.motivo||'')}</span></div>${q.added?`<span class="hint">Agregada a las preguntas del equipo</span>`:`<div><button class="btn sm" data-act="qadd" data-v="${i}" ${can?'':'disabled'}>Usar esta pregunta</button></div>`}</div>`).join('')}</div>`}
   h+=`<div class="stack" style="gap:6px"><div id="chat">${S.chat.map(m=>`<div class="msg ${m.role==='user'?'me':'ai'}">${m.role==='user'?esc(m.content):md(m.content||'…')}</div>`).join('')}</div>
     <div class="row"><input type="text" id="chatIn" placeholder="Pregunta sobre este proyecto: ¿quién hizo el módulo de pagos?, ¿hay pruebas?…" style="flex:1 1 220px"><button class="btn primary" data-act="chat" id="chatGo">Preguntar</button></div>
-    <span class="hint">${WEB.engine==='api'?'Claude responde aquí mismo.':'Cada consulta abre una ventana para copiarla a tu sesión de Claude y pegar la respuesta.'} Lleva el informe entregado, el repositorio, los apuntes de todos los evaluadores y las preguntas registradas.</span></div>`;
+    <span class="hint">${WEB.engine==='api'?'Claude responde aquí mismo.':WEB.engine==='mixed'?'Tus consultas abren una ventana para copiarlas a tu sesión de Claude y pegar la respuesta; las de la comisión se responden solas con la clave.':'Cada consulta abre una ventana para copiarla a tu sesión de Claude y pegar la respuesta.'} Lleva el informe entregado, el repositorio, los apuntes de todos los evaluadores y las preguntas registradas.</span></div>`;
   h+=asksHtml();
   put('#ai',h)}
 function asksHtml(){const as=S.saved.filter(x=>x.kind==='ask').sort((a,b)=>a.at-b.at),own=WEB.owner,can=cs()&&!S.readOnly;
@@ -232,7 +232,7 @@ function asksHtml(){const as=S.saved.filter(x=>x.kind==='ask').sort((a,b)=>a.at-
   return h+'</div>'}
 function addAsk(){const i=$('#askIn');const q=((i&&i.value)||'').trim();if(!q||!cs()||S.readOnly)return;i.value='';const id=newId();const d={key:key(),ev:S.ev,team:S.team,kind:'ask',q,a:'',seat:cs(),at:Date.now()};S.saved.push({id,...d});save('saved/'+id,d);renderAI()}
 async function answerAsk(id){const x=qaItem(id);if(!x||!S.sample||x.busy)return;x.busy=true;renderAI();let ok=false;
-  try{const r=await S.sample(ctx(false)+`\n\n# TAREA\n${seatName(seat(x.seat))||'Un integrante de la comisión'} hace esta consulta sobre el equipo: ${x.q}\nResponde en pocas líneas, con la evidencia y de dónde sale.`,{modelTier:S.tier,cache:false,onText:({text})=>{const e=$('#ask-'+x.id);if(e)e.innerHTML=md(text)}});x.a=r.text;x.aAt=Date.now();ok=true}
+  try{const r=await S.sample(ctx(false)+`\n\n# TAREA\n${seatName(seat(x.seat))||'Un integrante de la comisión'} hace esta consulta sobre el equipo: ${x.q}\nResponde en pocas líneas, con la evidencia y de dónde sale.`,{kind:'ask',modelTier:S.tier,cache:false,onText:({text})=>{const e=$('#ask-'+x.id);if(e)e.innerHTML=md(text)}});x.a=r.text;x.aAt=Date.now();ok=true}
   catch(e){if(e&&e.code!=='cancelled')setSync(errMsg(e))}
   x.busy=false;if(ok){const d=qaData(x);delete d.busy;save('saved/'+id,d)}renderAI()}
 async function chatSend(){const inp=$('#chatIn');const q=(inp.value||'').trim();if(!q||!S.sample||S.chatBusy)return;inp.value='';S.chatBusy=true;
@@ -533,6 +533,7 @@ document.addEventListener('input',ev=>{const el=ev.target,a=el.dataset&&el.datas
 });
 document.addEventListener('change',ev=>{const el=ev.target;
   if(el.id==='seatSel'){if(S.ev==='f2'||!WEB.owner)return;S.seat=el.value||null;ls.set('seat',S.seat||'');subTeam();renderAll()}
+  else if(el.id==='inbAutoChk'){AUTO.on=el.checked;ls.set('inbAuto',el.checked?'1':'0');AUTO.tries={};AUTO.err='';inbAuto()}
   else if(el.id==='inbSound'){INB.sound=el.checked;ls.set('inbSound',el.checked?'1':'0');if(el.checked)inbBeep(true)}
   else if(el.id==='teamSel')pickTeam(el.value);
   else if(el.id==='tier'){S.tier=el.value;ls.set('tier',S.tier)}});
@@ -564,7 +565,7 @@ const INB={saved:null,notes:null,seen:Number(ls.get('inbSeen')||0),open:false,to
 const tname=id=>{const t=S.teams.find(x=>x.id===id);return t?t.name:id};
 const who=sid=>{const s=seat(sid);return s?(s.name||s.label):sid};
 function subInbox(){INB.un.forEach(u=>u());INB.un=[];INB.saved=null;INB.notes=null;if(!S.db)return;
-  INB.un.push(S.db.collection('saved').where('ev','==',S.ev).onSnapshot(sn=>{const prev=INB.saved;INB.saved=sn.docs.map(d=>({id:d.id,...d.data()}));if(prev)inbDiffSaved(prev);renderInbox()},()=>{}));
+  INB.un.push(S.db.collection('saved').where('ev','==',S.ev).onSnapshot(sn=>{const prev=INB.saved;INB.saved=sn.docs.map(d=>({id:d.id,...d.data()}));if(prev)inbDiffSaved(prev);renderInbox();inbAuto()},()=>{}));
   INB.un.push(S.db.collection('notes').where('ev','==',S.ev).onSnapshot(sn=>{const prev=INB.notes;INB.notes=sn.docs.map(d=>({id:d.id,...d.data()}));if(prev)inbDiffNotes(prev);renderInbox()},()=>{}))}
 function inbItems(){const me=cs(),out=[];
   (INB.saved||[]).forEach(x=>{
@@ -598,12 +599,33 @@ function renderInbox(){const n=inbCount(),b=$('#inbBtn');if(b){b.innerHTML=`Band
   const card=x=>`<div class="qcard ${inbIsNew(x)?'isnew':''}"><div class="row" style="justify-content:space-between"><span><span class="tag">${LBL[x.type]}</span><span class="tag">${esc(who(x.seat))}</span></span><span class="hint">${esc(tname(x.team))} · ${esc(fdate(x.at))}</span></div><div class="q">${esc(x.text)}</div>${x.type==='ask'&&x.a?`<div class="out">${md(x.a)}</div>`:''}${x.type==='ask'&&x.pending&&!WEB.owner?`<span class="hint">Pendiente de respuesta</span>`:''}<div class="row">${x.type==='ask'&&x.pending&&WEB.owner&&S.sample?`<button class="btn primary sm" data-act="inbrun" data-v="${x.id}" ${INB.busy?'disabled':''}>${INB.busy===x.id?'Respondiendo…':'Responder con Claude'}</button>`:''}${x.type==='note'&&WEB.owner&&S.sample?`<button class="btn sm" data-act="inbq" data-v="${x.team}">Sugerir preguntas con Claude</button>`:''}<button class="btn sm" data-act="inbgo" data-v="${x.team}">Ver equipo</button></div></div>`;
   put(el,`<div class="row" style="justify-content:space-between"><h2>Bandeja de la comisión</h2><button class="btn sm" data-act="inbtoggle">Cerrar</button></div>
     <label class="field"><input type="checkbox" id="inbSound" ${INB.sound?'checked':''}> Avisar con sonido</label>
+    ${WEB.owner&&WEB.askEngine==='api'?`<label class="field"><input type="checkbox" id="inbAutoChk" ${AUTO.on?'checked':''}> Responder solas las consultas de la comisión</label>${AUTO.err?`<div class="banner">${esc(AUTO.err)}</div>`:''}`:''}
     ${WEB.owner?`<div class="stack" style="gap:8px"><div class="row" style="justify-content:space-between"><b>Consultas pendientes (${pend.length})</b>${pend.length>1&&S.sample?`<button class="btn sm" data-act="inball" ${INB.busy?'disabled':''}>Responder todas</button>`:''}</div>${pend.length?pend.map(card).join(''):`<span class="hint">No hay consultas pendientes.</span>`}</div>`:''}
     <div class="stack" style="gap:8px"><b>Actividad reciente</b>${rest.length?rest.map(card).join(''):`<span class="hint">Aquí aparece en vivo lo que agregan los demás evaluadores: apuntes, preguntas al equipo y consultas para Claude.</span>`}</div>`)}
 function inbClose(){if(!INB.open)return;INB.open=false;$('#inbox').hidden=true;INB.seen=Date.now();ls.set('inbSeen',String(INB.seen));renderInbox()}
 function waitTeam(){return new Promise(r=>{const t0=Date.now();const iv=setInterval(()=>{if((S.savedKey===key()&&S.notesKey===key()&&S.dossierState!=='loading')||Date.now()-t0>9000){clearInterval(iv);r()}},120)})}
+/* arma la consulta de otro equipo sin mover la pantalla: carga sus datos, construye el contexto y restaura */
+async function askPrompt(x){const k=`${x.ev}_${x.team}`;
+  const [dz,nt,sv]=await Promise.all([S.db.doc('dossiers/'+x.team).get(),S.db.collection('notes').where('ev','==',x.ev).where('key','==',k).get(),S.db.collection('saved').where('ev','==',x.ev).where('key','==',k).get()]);
+  const keep={team:S.team,ev:S.ev,dossier:S.dossier,notesDocs:S.notesDocs,saved:S.saved,myNotes:S.myNotes,mine:S.mine,mineId:S.mineId};
+  try{S.team=x.team;S.ev=x.ev;S.dossier=dz.exists?dz.data():null;const o={};nt.docs.forEach(d=>o[d.id]=d.data());S.notesDocs=o;S.myNotes=null;S.saved=sv.docs.map(d=>({id:d.id,...d.data()}));S.mine=null;S.mineId=null;
+    return ctx(false)+`\n\n# TAREA\n${seatName(seat(x.seat))||'Un integrante de la comisión'} hace esta consulta sobre el equipo: ${x.q}\nResponde en pocas líneas, con la evidencia y de dónde sale.`}
+  finally{Object.assign(S,keep)}}
+async function askBg(id){const x=(INB.saved||[]).find(y=>y.id===id);if(!x||x.a)return false;const ref=S.db.doc('saved/'+id),now=Date.now();
+  if(x.claim&&x.claim!==WEB.tab&&now-(x.claimAt||0)<120000)return false;
+  await ref.update({claim:WEB.tab,claimAt:now});await new Promise(r=>setTimeout(r,500+Math.random()*700));
+  const d=await ref.get();if(!d.exists||d.data().a||d.data().claim!==WEB.tab)return false;
+  const r=await S.sample(await askPrompt(x),{kind:'ask',modelTier:S.tier,cache:false});
+  if(!r||!r.text)return false;await ref.update({a:r.text,aAt:Date.now()});return true}
 async function inbRunOne(id){const x=(INB.saved||[]).find(y=>y.id===id);if(!x||x.a||!S.sample)return;
+  if(WEB.askEngine==='api'){await askBg(id);return}
   if(x.team!==S.team)pickTeam(x.team);S.tab='vivo';renderTabs();await waitTeam();await answerAsk(id)}
+/* con clave de API: las consultas de la comisión se responden solas, una tras otra */
+const AUTO={on:ls.get('inbAuto')!=='0',busy:false,tries:{}};
+async function inbAuto(){if(!WEB.owner||WEB.askEngine!=='api'||!AUTO.on||AUTO.busy||INB.busy)return;AUTO.busy=true;
+  try{for(;;){const x=inbPending().reverse().find(y=>(AUTO.tries[y.id]||0)<2);if(!x||!AUTO.on)break;AUTO.tries[x.id]=(AUTO.tries[x.id]||0)+1;INB.busy=x.id;renderInbox();
+      try{await askBg(x.id)}catch(e){AUTO.err=errMsg(e)||'No se pudo responder.'}INB.busy=null;await new Promise(r=>setTimeout(r,400))}}
+  finally{AUTO.busy=false;INB.busy=null;renderInbox()}}
 async function inbRun(id){if(INB.busy)return;INB.busy=id;renderInbox();try{await inbRunOne(id)}catch(e){}INB.busy=null;renderInbox()}
 async function inbAll(){if(INB.busy)return;const ids=inbPending().map(x=>x.id).reverse();for(const id of ids){INB.busy=id;renderInbox();try{await inbRunOne(id)}catch(e){}const x=(INB.saved||[]).find(y=>y.id===id);const loc=qaItem(id);if(!(loc&&loc.a)&&!(x&&x.a))break}INB.busy=null;renderInbox()}
 

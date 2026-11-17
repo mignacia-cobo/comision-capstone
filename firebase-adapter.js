@@ -102,11 +102,13 @@
     let RUB, LVIDX;
     try { RUB = JSON.parse(rub.data().json); LVIDX = JSON.parse(rub.data().lvidx); }
     catch (e) { return gateError({ message: 'Las rúbricas guardadas no se pueden leer. Vuelve a cargar el archivo de datos.' }); }
-    let apiKey = '';
-    if (owner) { try { const c = await db.doc('private/claude').get(); if (c.exists && c.data().key) apiKey = String(c.data().key); } catch (e) { /* sin clave: copiar y pegar */ } }
-    window.PANEL = { mode: 'web', owner, seat: owner ? 'doc' : seat, email, name: user.displayName || email, engine: owner ? (apiKey ? 'api' : 'manual') : 'none' };
+    let apiKey = '', scope = 'asks';
+    if (owner) { try { const c = await db.doc('private/claude').get(); if (c.exists && c.data().key) { apiKey = String(c.data().key); scope = c.data().scope === 'all' ? 'all' : 'asks'; } } catch (e) { /* sin clave: copiar y pegar */ } }
+    /* motor: 'manual' = todo por copiar y pegar; 'mixed' = la clave responde solo las consultas de la comisión; 'api' = la clave responde todo */
+    const engine = owner ? (apiKey ? (scope === 'all' ? 'api' : 'mixed') : 'manual') : 'none';
+    window.PANEL = { mode: 'web', owner, seat: owner ? 'doc' : seat, email, name: user.displayName || email, engine, askEngine: apiKey ? 'api' : 'manual', tab: Math.random().toString(36).slice(2, 10) };
     window.PANEL_DATA = { RUB, LVIDX, TPL_F2: tpl.exists ? tpl.data().b64 : '' };
-    const services = { db, user: userSvc(user, owner), sample: owner ? (apiKey ? apiSample(apiKey) : manualSample()) : null, dictation: makeDictation(), downloads };
+    const services = { db, user: userSvc(user, owner), sample: owner ? pickSample(apiKey, scope) : null, dictation: makeDictation(), downloads };
     window.claude = { use: n => Promise.resolve(services[n] || null) };
     if (started) return; started = true;
     const s = document.createElement('script'); s.src = 'app.js';
@@ -154,15 +156,19 @@
         <span class="hint" id="mProg">Usa el archivo de datos que te entrega Claude. No borra evaluaciones, apuntes ni horarios.</span>
         <div class="row"><button class="btn" id="mBackup">Descargar respaldo de las evaluaciones</button></div></div>
       <div class="stack" style="gap:8px"><b>Consultas a Claude</b>
-        <span class="hint">${window.PANEL.engine === 'api' ? 'Activo: las consultas se responden solas, con tu clave de la API de Anthropic.' : 'Ahora cada consulta se copia y se pega en tu sesión de Claude. Para que se respondan solas con un clic, pega aquí una clave de la API de Anthropic (se crea en console.anthropic.com y se paga por uso: centavos por consulta). Se guarda en tu proyecto de Firebase y solo tú puedes leerla.'}</span>
-        <div class="row"><input type="password" id="mKey" placeholder="sk-ant-…" autocomplete="off" aria-label="Clave de la API de Anthropic" style="flex:1 1 220px"><button class="btn" id="mKeySave">Guardar clave</button>${window.PANEL.engine === 'api' ? '<button class="btn ghost" id="mKeyDel">Quitar clave</button>' : ''}</div>
+        <span class="hint">${window.PANEL.engine === 'manual' ? 'Ahora todo se copia y se pega en tu sesión de Claude. Con una clave de la API de Anthropic (se crea en console.anthropic.com y se paga por uso: centavos por consulta) las consultas se responden solas. La clave se guarda en tu proyecto de Firebase y solo tú puedes leerla.' : window.PANEL.engine === 'mixed' ? 'Activo: la clave responde sola las consultas de la comisión. Lo tuyo (briefing, preguntas, niveles, feedback) sigue con tu sesión de Claude.' : 'Activo: la clave responde todas las consultas, también las tuyas.'}</span>
+        <label class="field"><input type="radio" name="mScope" value="asks" ${window.PANEL.engine !== 'api' ? 'checked' : ''}> Usar la clave solo para las consultas de la comisión</label>
+        <label class="field"><input type="radio" name="mScope" value="all" ${window.PANEL.engine === 'api' ? 'checked' : ''}> Usar la clave para todo</label>
+        <div class="row"><input type="password" id="mKey" placeholder="sk-ant-…" autocomplete="off" aria-label="Clave de la API de Anthropic" style="flex:1 1 220px"><button class="btn" id="mKeySave">Guardar</button>${window.PANEL.engine !== 'manual' ? '<button class="btn ghost" id="mKeyDel">Quitar clave</button>' : ''}</div>
         <span class="hint" id="mKeyMsg" aria-live="polite"></span></div>
       <div class="row" style="justify-content:space-between"><span class="hint">${esc(window.PANEL.email)}</span><span class="row"><button class="btn" id="mOut">Cerrar sesión</button><button class="btn" id="mX">Volver al panel</button></span></div>`);
     $('#mX').onclick = () => closeModal(); $('#mOut').onclick = signOut;
     $('#mKeySave').onclick = async () => {
-      const k = $('#mKey').value.trim(), m = $('#mKeyMsg');
-      if (!/^sk-ant-[\w-]{20,}$/.test(k)) { m.textContent = 'Esa no parece una clave de la API de Anthropic (empiezan con sk-ant-).'; return; }
-      try { await db.doc('private/claude').set({ key: k, at: Date.now() }); m.textContent = 'Clave guardada. Recargando…'; setTimeout(() => location.reload(), 600); }
+      const k = $('#mKey').value.trim(), m = $('#mKeyMsg'), sc = (modal.querySelector('[name="mScope"]:checked') || {}).value === 'all' ? 'all' : 'asks';
+      const has = window.PANEL.engine !== 'manual';
+      if (!k && !has) { m.textContent = 'Pega primero la clave.'; return; }
+      if (k && !/^sk-ant-[\w-]{20,}$/.test(k)) { m.textContent = 'Esa no parece una clave de la API de Anthropic (empiezan con sk-ant-).'; return; }
+      try { await db.doc('private/claude').set(k ? { key: k, scope: sc, at: Date.now() } : { scope: sc }, { merge: true }); m.textContent = 'Guardado. Recargando…'; setTimeout(() => location.reload(), 600); }
       catch (e) { m.textContent = 'No se pudo guardar (' + (e.code || e.message) + ').'; }
     };
     if ($('#mKeyDel')) $('#mKeyDel').onclick = async () => { try { await db.doc('private/claude').delete(); location.reload(); } catch (e) { $('#mKeyMsg').textContent = 'No se pudo quitar (' + (e.code || e.message) + ').'; } };
@@ -255,6 +261,12 @@
     const s = mk(false); s.json = mk(true); s.limits = async () => ({}); return s;
   }
 
+  function pickSample(key, scope) {
+    const man = manualSample(); if (!key) return man;
+    const api = apiSample(key); if (scope === 'all') return api;
+    const pick = o => (o && o.kind === 'ask') ? api : man;
+    const s = (i, o) => pick(o)(i, o); s.json = (i, o) => pick(o).json(i, o); s.limits = async () => ({}); return s;
+  }
   function apiSample(key) {
     const MODELS = { quick: 'claude-haiku-5-5', default: 'claude-sonnet-5-5', complex: 'claude-opus-5-5' };
     const fail = (code, userMessage) => ({ code, message: userMessage, userMessage });
