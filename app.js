@@ -25,7 +25,7 @@ const S={ev:ls.get('ev')||'f2',team:ls.get('team')||null,seat:ls.get('seat')||nu
   dictState:'idle',dictTarget:null,dictPartial:'',timer:{run:false,start:0,acc:0},readerHtml:''};
 if(WEB.owner){if(!S.seat)S.seat='doc'}else{S.ev='f3';S.seat=WEB.seat}
 const EV=()=>RUB[S.ev];
-Object.assign(S,{sideMin:ls.get('sidemin')==='1',rubMin:ls.get('rubmin')==='1',rubWide:ls.get('rubwide')==='1',paneMin:ls.get('panemin')||'',fs:Number(ls.get('fs'))||15,qgen:false,qall:false,qerr:'',qclean:false,findI:-1,toc:ls.get('toc')!=='0',headMin:ls.get('headmin')!=null?ls.get('headmin')==='1':window.innerHeight<780});
+Object.assign(S,{sideMin:ls.get('sidemin')==='1',rubMin:ls.get('rubmin')==='1',rubWide:ls.get('rubwide')==='1',paneMin:ls.get('panemin')||'',fs:Number(ls.get('fs2'))||13,presView:ls.get('presview')||'diseno',slideBig:false,slides:null,qgen:false,qall:false,qerr:'',qclean:false,findI:-1,toc:ls.get('toc')!=='0',headMin:ls.get('headmin')!=null?ls.get('headmin')==='1':window.innerHeight<780});
 const isOwn=()=>typeof WEB==='undefined'||!!WEB.owner; /* en el artifact siempre; en la versión web solo la docente */
 const canQ=x=>isOwn()||x.seat===cs();
 const cs=()=>S.ev==='f2'?'doc':S.seat; /* en Fase 2 evalúa solo el docente de la asignatura */
@@ -161,6 +161,7 @@ function renderTabs(){if(!TABS.some(([id])=>id===S.tab))S.tab='trabajo';
   TABS.forEach(([id])=>{$('#tab-'+id).hidden=S.tab!==id});layout()}
 /* distribución: lista comprimible, expediente arriba y en vivo abajo, rúbrica al costado */
 function layout(){const w=$('#wrap');if(!w)return;w.classList.toggle('side-min',S.sideMin);w.classList.toggle('rub-min',S.rubMin);w.classList.toggle('rub-wide',S.rubWide&&!S.rubMin);
+  $('#tab-expediente').style.setProperty('--fs',S.fs+'px');
   const k=$('#tab-trabajo');k.classList.toggle('exp-min',S.paneMin==='exp');k.classList.toggle('vivo-min',S.paneMin==='vivo');
   $('#expMin').textContent=S.paneMin==='exp'?'Mostrar':'Ocultar';$('#vivoMin').textContent=S.paneMin==='vivo'?'Mostrar':'Ocultar';
   $('#expMax').textContent=S.paneMin==='vivo'?'Repartir':'Ampliar';$('#vivoMax').textContent=S.paneMin==='exp'?'Repartir':'Ampliar';
@@ -464,8 +465,8 @@ function bars(txt){const rows=String(txt||'').split('\n').map(l=>l.match(/^\s*(\
 function reader(title,meta,text,emptyMsg){if(!String(text||'').trim()){S.readerHtml='';return`<div class="empty">${esc(emptyMsg)}</div>`}
   const r=rich(text);S.readerHtml=r.html;S.findI=-1;const words=String(text).split(/\s+/).length;
   return`<div class="doc-bar"><div style="min-width:0" title="${esc(meta)}"><b>${esc(title)}</b> <span class="hint">${words.toLocaleString('es-CL')} palabras${text.length>=41900?' · recortado a 42.000 letras':''}</span></div>
-    <div class="row"><input type="text" id="findIn" data-act="find" placeholder="Buscar…" style="width:140px"><button class="btn sm" data-act="findgo" data-v="-1" title="Coincidencia anterior" aria-label="Coincidencia anterior">↑</button><button class="btn sm" data-act="findgo" data-v="1" title="Coincidencia siguiente" aria-label="Coincidencia siguiente">↓</button><span class="hint" id="findN"></span>${r.toc.length>2?`<button class="btn sm" data-act="toc" title="Mostrar u ocultar el índice del documento">Índice</button>`:''}<button class="btn sm" data-act="fs" data-v="-1" title="Letra más pequeña" aria-label="Letra más pequeña">A−</button><button class="btn sm" data-act="fs" data-v="1" title="Letra más grande" aria-label="Letra más grande">A+</button></div></div>
-    <div class="doc${r.toc.length>2?(S.toc?'':' toc-off'):' notoc'}" id="docBox">${r.toc.length>2?`<nav class="doc-toc" aria-label="Índice del documento"><div class="sec-label">Índice · ${r.toc.length} secciones</div>${r.toc.map(x=>`<button class="l${x.lv}" data-act="goto" data-v="${x.id}">${esc(x.t)}</button>`).join('')}</nav>`:''}<article class="reader" id="reader" style="font-size:${S.fs}px">${r.html}</article></div>`}
+    <div class="row"><input type="text" id="findIn" data-act="find" placeholder="Buscar…" style="width:140px"><button class="btn sm" data-act="findgo" data-v="-1" title="Coincidencia anterior" aria-label="Coincidencia anterior">↑</button><button class="btn sm" data-act="findgo" data-v="1" title="Coincidencia siguiente" aria-label="Coincidencia siguiente">↓</button><span class="hint" id="findN"></span>${r.toc.length>2?`<button class="btn sm" data-act="toc" title="Mostrar u ocultar el índice del documento">Índice</button>`:''}</div></div>
+    <div class="doc${r.toc.length>2?(S.toc?'':' toc-off'):' notoc'}" id="docBox">${r.toc.length>2?`<nav class="doc-toc" aria-label="Índice del documento"><div class="sec-label">Índice · ${r.toc.length} secciones</div>${r.toc.map(x=>`<button class="l${x.lv}" data-act="goto" data-v="${x.id}">${esc(x.t)}</button>`).join('')}</nav>`:''}<article class="reader" id="reader">${r.html}</article></div>`}
 function renderDossier(){const el=$('#tab-expediente'),t=team();
   $('#exTabs').innerHTML=EXT.map(([id,l])=>`<button data-act="ex" data-v="${id}" aria-pressed="${S.ex===id}">${l}</button>`).join('');
   if(!t){put(el,'');return}const d=S.dossier;
@@ -475,10 +476,14 @@ function renderDossier(){const el=$('#tab-expediente'),t=team();
   if(S.ex==='informe'){const useAva=av&&av.informe;const text=useAva?av.informe:r0.informe;
     h+=`<section class="card pad stack">${reader('Informe final',useAva?'Versión enviada al AVA: '+av.informe_file:'Versión del repositorio: '+(r0.informe_path||''),text,'No hay un informe final para mostrar.')}
       <details><summary>${esc(useAva?'Versión enviada al AVA':'Versión del repositorio')} · ${av?`${(av.files||[]).length} archivo${(av.files||[]).length===1?'':'s'} en el AVA`:'sin envío en el AVA'} · ${r0.informe_path?'informe en el repositorio':'sin informe en el repositorio'}${useAva?(av.igual_repo?' · mismo texto':' · el texto difiere'):''}</summary><dl class="kv" style="margin-top:8px"><dt>Entrega en el AVA</dt><dd>${av?esc((av.files||[]).join('\n')):'Ningún integrante envió el informe final en el AVA al cierre del plazo.'}</dd><dt>En el repositorio</dt><dd>${esc(r0.informe_path||'No se encontró un archivo 2.6 o de informe final')}${useAva?(av.igual_repo?'\nMismo texto que el enviado al AVA.':'\nSu texto difiere del enviado al AVA.'):''}</dd></dl></details></section>`}
-  else if(S.ex==='pres'){const text=(av&&av.pres)||r0.pres,name=(av&&av.pres&&av.pres_file)||r0.pres_path||'';const sl=String(text||'').split('\n').map(l=>l.match(/^\[(\d+)\]\s*(.*)$/)).filter(Boolean);
-    h+=`<section class="card pad stack"><h2>Presentación</h2><div class="hint">${text?esc(name)+(av&&av.pres?' · enviada al AVA':' · en el repositorio'):'No se encontró una presentación en el AVA ni en el repositorio.'}</div>
-      ${sl.map(m=>{const p=m[2].split(' / ').filter(Boolean);return`<div class="slide"><span class="num">${m[1]}</span><div><b>${esc(p[0]||'(lámina sin texto)')}</b>${p.length>1?`<p>${esc(p.slice(1).join(' · '))}</p>`:''}</div></div>`}).join('')}
-      ${text&&!sl.length?`<article class="reader">${rich(text).html}</article>`:''}
+  else if(S.ex==='pres'){loadSlides();const text=(av&&av.pres)||r0.pres,name=(av&&av.pres&&av.pres_file)||r0.pres_path||'';const sl=String(text||'').split('\n').map(l=>l.match(/^\[(\d+)\]\s*(.*)$/)).filter(Boolean);
+    const im=S.slides&&S.slides.team===t.id?S.slides.items:[];const has=im&&im.length>0,design=has&&S.presView!=='texto';
+    h+=`<section class="card pad stack"><div class="row" style="justify-content:space-between"><div style="min-width:0"><h2>Presentación</h2><div class="hint">${text?esc(name)+(av&&av.pres?' · enviada al AVA':' · en el repositorio'):'No se encontró una presentación en el AVA ni en el repositorio.'}</div></div>
+      ${has?`<span class="row"><span class="seg sm" role="group" aria-label="Cómo ver la presentación"><button data-act="presview" data-v="diseno" aria-pressed="${design}">Diseño</button><button data-act="presview" data-v="texto" aria-pressed="${!design}">Texto</button></span>${design?`<button class="btn sm" data-act="slidebig" data-v="1">${S.slideBig?'Ver miniaturas':'Ver grandes'}</button>`:''}</span>`:''}</div>
+      ${im===null?`<span class="hint">Cargando las láminas…</span>`:''}
+      ${design?`<div class="hint">Láminas de: ${esc(im[0].src||'')}</div><div class="slides${S.slideBig?' big':''}">${im.map(x=>`<figure class="sl" id="sl-${Number(x.n)}"><img loading="lazy" alt="Lámina ${Number(x.n)}" title="Clic para ${S.slideBig?'volver a las miniaturas':'verla grande'}" data-act="slidebig" data-v="${Number(x.n)}" src="data:image/jpeg;base64,${String(x.b64).replace(/[^A-Za-z0-9+/=]/g,'')}"><figcaption>${Number(x.n)} de ${Number(x.total)||im.length}</figcaption></figure>`).join('')}</div>`
+        :`${sl.map(m=>{const p=m[2].split(' / ').filter(Boolean);return`<div class="slide"><span class="num">${m[1]}</span><div><b>${esc(p[0]||'(lámina sin texto)')}</b>${p.length>1?`<p>${esc(p.slice(1).join(' · '))}</p>`:''}</div></div>`}).join('')}
+      ${text&&!sl.length?`<article class="reader">${rich(text).html}</article>`:''}`}
       ${(r0.pres_paths||[]).length?`<details><summary>Presentaciones en el repositorio</summary><ul class="files">${r0.pres_paths.map(p=>`<li>${esc(p)}</li>`).join('')}</ul></details>`:''}</section>`}
   else if(S.ex==='repo'){(d.repos||[]).forEach(r=>{const rc=String(r.recent||'').split('\n').map(l=>l.match(/^(\d{4}-\d\d-\d\d)\s+(.*?):\s(.*)$/)).filter(Boolean);
     h+=`<section class="card pad stack"><h2>Repositorio</h2><dl class="kv"><dt>Dirección</dt><dd><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a></dd><dt>Último commit</dt><dd>${esc(r.head)}</dd><dt>Commits (sin merges)</dt><dd>${esc(r.total)} en ${(r.branches||[]).length} ramas</dd><dt>Pruebas</dt><dd>${esc(r.tests)}</dd><dt>Tipos de archivo</dt><dd>${esc(r.ext)}</dd></dl></section>
@@ -487,7 +492,7 @@ function renderDossier(){const el=$('#tab-expediente'),t=team();
       <div class="two"><section class="card pad stack"><h2>Carpetas</h2><div class="tree">${String(r.tree||'').split('\n').filter(Boolean).map(l=>{const parts=l.replace(/\/ \(\d+\)$/,'').split('/');const cnt=(l.match(/\((\d+)\)$/)||[])[1]||'';return`<span style="padding-left:${(parts.length-1)*16}px">${esc(parts[parts.length-1])}/ <span class="hint">${cnt}</span></span>`}).join('')}</div></section>
       <section class="card pad stack"><h2>Documentos</h2><ul class="files">${String(r.docs||'').split('\n').filter(Boolean).map(l=>`<li>${esc(l)}</li>`).join('')}</ul></section></div>
 
-      ${r.readme?`<section class="card pad stack"><h2>README</h2><article class="reader" style="font-size:${S.fs}px">${rich(r.readme).html}</article></section>`:''}`})}
+      ${r.readme?`<section class="card pad stack"><h2>README</h2><article class="reader">${rich(r.readme).html}</article></section>`:''}`})}
   else if(S.ex==='readme'){const rs=(d.repos||[]).filter(r=>String(r.readme||'').trim());const txt=rs.map(r=>((d.repos||[]).length>1?`# ${r.url}\n\n`:'')+r.readme).join('\n\n');const inn=/innovaci/i.test(txt);
     h+=`<section class="card pad stack">${reader('README','README del repositorio',txt,'El repositorio no tiene README o no se pudo leer.')}
       ${rs.length?`<div class="banner ${inn?'ok':''}">${inn?'El punto de innovación va en el README: aparece mencionado en este texto.':'El punto de innovación va en el README y no aparece en el texto leído. Revisa el repositorio en línea por si está más abajo o en otro archivo.'} ${(d.repos||[]).map(r=>`<a href="${esc(r.url)}#readme" target="_blank" rel="noopener">Abrir en GitHub ↗</a>`).join(' ')}</div>`:''}</section>`}
@@ -497,6 +502,12 @@ function renderDossier(){const el=$('#tab-expediente'),t=team();
       ${a.retro_general?`<div class="out">${md(a.retro_general)}</div>`:''}</section>`:`<div class="card pad empty">Este equipo no entregó el informe de avance de la Fase 2.</div>`}
   else h+=`<section class="card pad stack">${reader('Revisión de evidencias del repositorio','Estado al 15 de noviembre, 21:00 h',d.revision15nov,'No hay revisión cargada para este equipo.')}</section>`;
   put(el,h+foot);if(S.ex==='readme'&&$('#reader')&&!$('#findIn').value){$('#findIn').value='innovaci';doFind('innovaci',true)}}
+/* imágenes de las láminas: se cargan solo al abrir la sección Presentación */
+function loadSlides(){const id=S.team;if(!S.db||!id||(S.slides&&S.slides.team===id))return;S.slides={team:id,items:null};
+  let un=null,done=false;const fin=items=>{if(done)return;done=true;if(un){try{un()}catch(e){}}if(S.slides&&S.slides.team===id){S.slides.items=items;if(S.ex==='pres')renderDossier()}};
+  try{un=S.db.collection('dossiers').where('slideOf','==',id).onSnapshot(sn=>fin(sn.docs.map(d=>d.data()).filter(x=>x&&x.b64).sort((a,b)=>a.n-b.n)),()=>fin([]))}catch(e){fin([])}
+  if(done&&un){try{un()}catch(e){}}
+  setTimeout(()=>fin([]),12000)}
 let findT=null;
 function doFind(q,quiet){const el=$('#reader'),out=$('#findN');if(!el)return;el.innerHTML=S.readerHtml;S.findI=-1;q=q.trim();if(q.length<2){out.textContent='';return}
   const re=new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');const w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);const nodes=[];while(w.nextNode())nodes.push(w.currentNode);let n=0;
@@ -515,7 +526,7 @@ function subEvals(){unEv&&unEv();S.evalDocs={};if(!S.db)return;
     const id=cs()&&S.team?evalId():null;if(id&&dirty('evals/'+id)&&S.evalDocs[id])o[id]=S.evalDocs[id];
     S.evalDocs=o;if(id&&!dirty('evals/'+id)){S.mine=null}
     renderSide();renderRubric();renderPauta();renderCurso()},e=>setSync('Sin conexión'))}
-function subTeam(){unTeam.forEach(u=>u());unTeam=[];S.notesDocs={};S.saved=[];S.dossier=null;S.dossierState='loading';S.myNotes=null;S.mine=null;S.out=null;S.chat=[];S.sugg=null;S.suggErr='';S.closeMsg='';S.qerr='';S.qclean=false;
+function subTeam(){unTeam.forEach(u=>u());unTeam=[];S.notesDocs={};S.saved=[];S.dossier=null;S.dossierState='loading';S.myNotes=null;S.mine=null;S.out=null;S.chat=[];S.sugg=null;S.suggErr='';S.closeMsg='';S.qerr='';S.qclean=false;S.slides=null;
   if(!S.team)return;if(!S.db){S.dossierState='none';return}const k=key();
   unTeam.push(S.db.collection('notes').where('ev','==',S.ev).where('key','==',k).onSnapshot(sn=>{const o={};sn.docs.forEach(d=>o[d.id]=d.data());S.notesDocs=o;S.notesKey=k;
     if(cs()){const id=`${k}_${cs()}`;if(!dirty('notes/'+id)){const fresh=clone(o[id]||notesBlank());const a=document.activeElement;const typing=a&&(a.id==='nText'||a.id==='nTr');
@@ -543,7 +554,9 @@ document.addEventListener('click',ev=>{const b=ev.target.closest('[data-act]');i
   else if(a==='rubwide'){S.rubWide=!S.rubWide;ls.set('rubwide',S.rubWide?'1':'0');layout()}
   else if(a==='panemin'){S.paneMin=S.paneMin===v?'':v;ls.set('panemin',S.paneMin);layout()}
   else if(a==='panemax'){const o=v==='exp'?'vivo':'exp';S.paneMin=S.paneMin===o?'':o;ls.set('panemin',S.paneMin);layout()}
-  else if(a==='fs'){S.fs=Math.min(22,Math.max(12,S.fs+Number(v)));ls.set('fs',String(S.fs));const r=$('#reader');if(r)r.style.fontSize=S.fs+'px'}
+  else if(a==='fs'){S.fs=Math.min(20,Math.max(10,S.fs+Number(v)));ls.set('fs2',String(S.fs));layout()}
+  else if(a==='presview'){S.presView=v;ls.set('presview',v);renderDossier()}
+  else if(a==='slidebig'){S.slideBig=!S.slideBig;renderDossier();const e=document.getElementById('sl-'+v);if(e)e.scrollIntoView({block:'start'})}
   else if(a==='findgo')findGo(Number(v))
   else if(a==='toc'){S.toc=!S.toc;ls.set('toc',S.toc?'1':'0');const x=$('#docBox');if(x)x.classList.toggle('toc-off',!S.toc)}
   else if(a==='ex'){S.ex=v;if(S.paneMin==='exp'){S.paneMin='';ls.set('panemin','');layout()}renderDossier();$('#tab-expediente').scrollTop=0}

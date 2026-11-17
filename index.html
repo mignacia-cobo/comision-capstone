@@ -135,6 +135,25 @@ mark.cur{background:var(--accent);color:var(--accent-fg);outline-color:var(--acc
 @container (min-width:520px){.vgrid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .vgrid #notes{grid-column:1;grid-row:1} .vgrid #ai{grid-column:1;grid-row:2} .vgrid #qa{grid-column:2;grid-row:1 / span 2}}
 @container (min-width:980px){.vgrid{grid-template-columns:repeat(3,minmax(0,1fr))} .vgrid #notes,.vgrid #qa,.vgrid #ai{grid-row:1} .vgrid #qa{grid-column:2} .vgrid #ai{grid-column:3}}
 #head h1{font-size:20px}
+#tab-expediente{font-size:var(--fs,13px)}
+#tab-expediente .pad{padding:10px 12px}
+#tab-expediente h2{font-size:1.08em}
+#tab-expediente .hint,#tab-expediente .kv,#tab-expediente th{font-size:.92em}
+#tab-expediente table.doc th,#tab-expediente table.doc td,#tab-expediente .def .dt,#tab-expediente .files,#tab-expediente .tree{font-size:.95em}
+#tab-expediente th,#tab-expediente td{padding:5px 8px}
+#tab-expediente .reader{font-size:1em;line-height:1.55}
+#tab-expediente .reader h3{font-size:1.25em;margin:18px 0 6px;padding-top:10px}
+#tab-expediente .reader h4{font-size:1.12em;margin:14px 0 4px}
+#tab-expediente .reader h5{font-size:1em;margin:12px 0 4px}
+#tab-expediente .reader p{margin:0 0 7px}
+#tab-expediente .def .dt{padding:5px 10px}
+#tab-expediente .def .dd,#tab-expediente .def.one{padding:6px 10px}
+.slides{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.slides.big{grid-template-columns:minmax(0,1fr)}
+.sl{margin:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface2)}
+.sl img{display:block;width:100%;height:auto;cursor:zoom-in}
+.slides.big .sl img{cursor:zoom-out}
+.sl figcaption{font-size:11.5px;color:var(--muted);padding:2px 8px;text-align:right}
 .top-in{max-width:none!important;padding-block:6px!important;gap:6px 12px!important}
 #seatSel{max-width:210px}
 .seg button{padding:5px 11px}
@@ -298,7 +317,7 @@ body.web.eng-manual label.field:has(#tier),body.web.eng-mixed label.field:has(#t
       <div id="tab-trabajo" class="tabpane">
         <section class="pane" id="pane-exp" aria-label="Expediente">
           <div class="pane-h"><h2>Expediente</h2><div class="seg sm" id="exTabs" role="group" aria-label="Sección del expediente"></div>
-            <span class="row"><button class="btn sm ghost" data-act="panemax" data-v="exp" id="expMax">Ampliar</button><button class="btn sm ghost" data-act="panemin" data-v="exp" id="expMin">Ocultar</button></span></div>
+            <span class="row"><button class="btn sm ghost" data-act="fs" data-v="-1" title="Letra más pequeña en el expediente" aria-label="Letra más pequeña">A−</button><button class="btn sm ghost" data-act="fs" data-v="1" title="Letra más grande en el expediente" aria-label="Letra más grande">A+</button><button class="btn sm ghost" data-act="panemax" data-v="exp" id="expMax">Ampliar</button><button class="btn sm ghost" data-act="panemin" data-v="exp" id="expMin">Ocultar</button></span></div>
           <div class="pane-b stack" id="tab-expediente"></div>
         </section>
         <div class="splitter" id="split" title="Arrastra para repartir el espacio entre el expediente y el trabajo en vivo"></div>
