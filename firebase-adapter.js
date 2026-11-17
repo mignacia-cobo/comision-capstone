@@ -377,14 +377,14 @@
     let rec = null, want = false, state = 'idle', restarts = [];
     const hF = [], hP = [], hS = [];
     const sub = (arr, h) => { arr.push(h); return () => { const i = arr.indexOf(h); if (i >= 0) arr.splice(i, 1); }; };
-    const set = (s, reason) => { state = s; hS.forEach(h => h({ state: s, reason })); };
+    const set = (s, reason, detail) => { state = s; hS.forEach(h => h({ state: s, reason, detail })); };
     function start(opts) {
       return new Promise((res, rej) => {
         if (state === 'listening') return res();
         want = true; restarts = []; set('starting');
         rec = new SR(); const lang = opts && opts.language;
         rec.lang = lang === 'es' ? 'es-CL' : (lang || navigator.language || 'es-CL'); rec.continuous = true; rec.interimResults = true;
-        let begun = false, denied = false;
+        let begun = false, denied = false, lastErr = '';
         rec.onstart = () => { if (!begun) { begun = true; set('listening'); res(); } };
         rec.onresult = e => {
           let interim = '';
@@ -394,15 +394,15 @@
           }
           hP.forEach(h => h({ text: interim }));
         };
-        rec.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { denied = true; want = false; } };
+        rec.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { denied = true; want = false; } else if (e.error !== 'no-speech' && e.error !== 'aborted') lastErr = e.error; };
         rec.onend = () => {
           hP.forEach(h => h({ text: '' }));
           if (want) { /* el navegador corta tras un silencio: se retoma solo */
             const now = Date.now(); restarts = restarts.filter(t => now - t < 10000); restarts.push(now);
-            if (restarts.length <= 5) { try { rec.start(); return; } catch (e) { /* cae al cierre */ } }
+            if (restarts.length <= 3) { try { rec.start(); return; } catch (e) { /* cae al cierre */ } }
           }
           const failed = want; want = false;
-          set('idle', denied ? 'not_granted' : failed ? 'upstream_error' : 'stopped');
+          set('idle', denied ? 'not_granted' : failed ? 'upstream_error' : 'stopped', failed ? lastErr : '');
           if (!begun) rej({ code: denied ? 'not_granted' : 'upstream_error', message: 'No se pudo abrir el micrófono' });
         };
         try { rec.start(); } catch (e) { want = false; set('idle', 'upstream_error'); rej({ code: 'upstream_error', message: String(e) }); }

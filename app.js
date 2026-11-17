@@ -194,7 +194,7 @@ function renderNotes(){const t=team();if(!t){put('#notes','');return}
       ${S.dict?`<button class="btn sm ${dOn?'rec':''}" data-act="dict" data-v="transcript" ${can?'':'disabled'}>${dOn?'■ Detener':'● Escuchar la presentación'}</button>`:''}</div>
     ${S.dict?'':`<span class="hint">El dictado solo está disponible en Chrome o Edge. Puedes pegar o escribir la transcripción.</span>`}
     <textarea id="nTr" data-act="ntr" rows="4" placeholder="Aquí se agrega lo que capte el micrófono. También puedes editarlo." ${can?'':'disabled'}>${esc(n.transcript)}</textarea>
-    <div class="partial" id="partial">${dOn?esc(S.dictPartial):''}</div>
+    <div class="partial" id="partial">${dOn?esc(S.dictPartial):''}</div>${S.dictErr?`<div class="banner">${esc(S.dictErr)}</div>`:''}
     <div id="others"></div>`);
   renderOthers()}
 function renderOthers(){const el=$('#others');if(!el)return;
@@ -612,7 +612,7 @@ document.addEventListener('click',ev=>{const b=ev.target.closest('[data-act]');i
   else if(a==='csv'){S.dl.save({filename:`comision_capstone_${S.ev}.csv`,data:csv()}).catch(()=>{})}
   else if(a==='dict'){if(!S.dict||!cs())return;
     if(S.dictState!=='idle'){S.dict.stop().catch(()=>{});return}
-    S.dictTarget=v;S.dictPartial='';S.dict.start(S.dictNoLang?undefined:{language:'es'}).catch(e=>{if(e&&e.code==='unavailable'&&!S.dictNoLang){S.dictNoLang=true;setSync('Dictado: vuelve a presionar')}else if(e&&e.code==='not_granted'){S.dict=null;renderNotes();renderQA()}})}
+    S.dictTarget=v;S.dictPartial='';S.dictErr='';S.dict.start(S.dictNoLang?undefined:{language:'es'}).catch(e=>{if(e&&e.code==='unavailable'&&!S.dictNoLang){S.dictNoLang=true;setSync('Dictado: vuelve a presionar')}else if(e&&e.code==='not_granted'){S.dict=null;renderNotes();renderQA()}})}
 });
 document.addEventListener('input',ev=>{const el=ev.target,a=el.dataset&&el.dataset.act;if(!a)return;
   if(a==='ntext'||a==='ntr'){if(!S.myNotes)S.myNotes=notesBlank();if(a==='ntext')S.myNotes.text=el.value;else S.myNotes.transcript=el.value;touchNotes()}
@@ -642,7 +642,9 @@ async function boot(){renderAll();const C=window.claude;const use=n=>C&&C.use?C.
   use('sample').then(s=>{S.sample=s;renderAI();renderQA();renderRubric()});
   use('downloads').then(d=>{S.dl=d;renderCurso();renderRubric()});
   use('dictation').then(d=>{S.dict=d;if(d){d.onFinal(e=>onDictFinal(e.text));d.onPartial(e=>{S.dictPartial=e.text;const p=$('#partial');if(p&&S.dictTarget==='transcript')p.textContent=e.text});
-    d.onState(e=>{S.dictState=e.state;if(e.state==='idle'&&e.reason==='hidden')setSync('El dictado se detuvo al ocultar la pestaña');renderNotes();renderQA()})}renderNotes();renderQA()});
+    d.onState(e=>{S.dictState=e.state;if(e.state==='idle'&&e.reason==='hidden')setSync('El dictado se detuvo al ocultar la pestaña');
+      if(e.state==='idle'&&e.reason&&!['stopped','viewer_stopped','hidden','completed','not_granted'].includes(e.reason)){S.dictErr=e.detail==='audio-capture'?'El dictado no encontró un micrófono. Revisa cuál está elegido como entrada de audio en el computador.':'El dictado se cortó: el navegador no logró conectarse a su servicio de reconocimiento de voz'+(e.detail==='network'?' (error de red)':'')+'. Prueba con otra red, por ejemplo el internet del celular, o usa el dictado del computador dentro del cuadro de transcripción (en Mac: tecla de micrófono o Fn dos veces).';setSync('El dictado se cortó')}
+      else if(e.state==='listening')S.dictErr='';renderNotes();renderQA()})}renderNotes();renderQA()});
   const[db,user]=await Promise.all([use('db'),use('user')]);S.db=db;S.user=user;S.ready=true;
   if(user){try{const w=await user.can('data.write');if(w===false)S.readOnly=true;if(!S.seat&&await user.isOwner()){S.seat='doc';ls.set('seat','doc')}}catch(e){}}
   if(!db){renderAll();return}
